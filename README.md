@@ -1,53 +1,33 @@
-# LPIII Keyboard
+# Light Keyboard — Initial Release
 
-A Compose implementation of the Light Phone's keyboard. To be used in LightOS, community tools, and/or as an Android system keyboard.
+A private, Light Phone 3–style Android system keyboard combining the LPIII Keyboard interface with expanded on-device typing tools. Set it as your default keyboard to use it in any Android app.
 
-**Note that as of July 1, 2026, public releases of LightOS are not yet using this as the embedded keyboard. Coming soon!**
+## What’s included
 
-If you'd like to contribute/file issues, please read [CONTRIBUTING.md](CONTRIBUTING.md). For general questions/comments about the keyboard, please head to our [discussions](https://github.com/orgs/lightphone/discussions/categories/keyboard) page.
+- **Offline voice-to-text:** fully integrated with the Vosk engine; speech is processed on-device.
+- **Autocorrect:** intelligent word correction, with revert-on-backspace support.
+- **Auto-capitalization and auto-period:** modern typing conveniences, enabled by default.
+- **Redesigned settings:** a custom, minimalist interface aligned with the Light Phone 3 aesthetic.
+- **Suggestions UI:** a minimalist overlay for correcting misspelled words.
 
-### Layouts
+## Install and set up
 
-Currently, only English/QWERTY is supported. We want to add more languages/layouts as soon as possible. Please reach out if there are any you are particularly excited about!
+Download the latest APK from [Releases](../../releases) and open it on your Android device. Then open **Light Keyboard** and:
 
-## Usage
+1. Enable it in Android’s keyboard settings.
+2. Choose it as the active keyboard.
 
-The `app` module wraps the keyboard into an Android IME app, which can be installed on any Android device
+Voice dictation may download an offline Vosk speech model the first time it is enabled.
 
-The `ui` module is an Android library that contains all the actual keyboard UI code:
+## Credits and attribution
 
-Use the [Lp3Keyboard](ui/src/main/java/com/thelightphone/lp3Keyboard/ui/Lp3Keyboard.kt) composable for "embedded" usage (used in LightOS with some auxiliary UI around it)
-```kotlin
-@Composable
-fun Lp3Keyboard(
-    layout: Layout,
-    options: KeyboardOptions,
-    callback: Lp3KeyboardCallback,
-    swipeCallback: Lp3KeyboardSwipeCallback<*>?
-) 
-```
+This release combines and builds on two open-source projects:
 
-Use the [Lp3KeyboardWrapper](ui/src/main/java/com/thelightphone/lp3Keyboard/ui/Lp3KeyboardWrapper.kt) composable for a self-contained version (includes a dismiss button)
-```kotlin
-@Composable
-fun Lp3KeyboardWrapper(
-    layout: Layout,
-    keyboardOptions: KeyboardOptions,
-    layoutOptions: LayoutOptions,
-    callback: Lp3KeyboardCallback,
-    swipeCallback: Lp3KeyboardSwipeCallback<*>?
-) 
-```
+- **[LPIII Keyboard](https://github.com/lightphone/lp3-keyboard)** by [The Light Phone](https://github.com/lightphone), which provides the Light Phone 3 keyboard implementation and visual foundation.
+- **[Light Keyboard](https://github.com/adam-weber/light-keyboard)** by [Adam Weber](https://github.com/adam-weber), which provides the Android system-keyboard packaging and on-device typing features.
 
-Use the [Lp3RawKeyboardView](ui/src/main/java/com/thelightphone/lp3Keyboard/ui/Lp3KeyboardView.kt) view for mixing in with classic Android views in a Java environment
-```kotlin
-open class Lp3RawKeyboardView @JvmOverloads constructor(
-    context: Context,
-    attrs: AttributeSet? = null,
-) 
-```
+All credit for the original projects, their code, and their designs remains with their respective publishers and contributors. This is an independent combined release; it is not affiliated with or endorsed by The Light Phone.
 
-Use the [Lp3KeyboardView](ui/src/main/java/com/thelightphone/lp3Keyboard/ui/Lp3KeyboardView.kt) view for mixing in with classic Android views in Kotlin
-```kotlin
-class Lp3RawKeyboardView<T>(context: Context, private val viewModel: Lp3KeyboardViewModel<T>) 
-```
+## License
+
+This project retains the applicable licenses and notices from its upstream sources. See the included license files and upstream repositories for their complete terms.
