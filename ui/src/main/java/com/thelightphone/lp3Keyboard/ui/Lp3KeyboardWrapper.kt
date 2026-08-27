@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import com.thelightphone.lp3Keyboard.ui.layout.EnQwerty
 import com.thelightphone.lp3Keyboard.ui.layout.EnShared
 import com.thelightphone.lp3Keyboard.ui.layout.Layout
+import com.thelightphone.lp3Keyboard.ui.viewmodel.DictationState
 import com.thelightphone.lp3Keyboard.ui.viewmodel.Lp3KeyboardViewModel
 import com.thelightphone.lp3Keyboard.ui.viewmodel.defaultEmojis
 
@@ -50,6 +51,8 @@ fun Lp3KeyboardWrapper(
     val layout by viewModel.layoutFlow.collectAsState()
     val keyboardOptions by viewModel.keyboardOptionsFlow.collectAsState()
     val layoutOptions by viewModel.layoutOptionsFlow.collectAsState()
+    val dictationState by viewModel.dictationStateFlow.collectAsState()
+    val suggestions by viewModel.suggestionsFlow.collectAsState()
     Lp3KeyboardWrapper(
         layout,
         keyboardOptions,
@@ -57,7 +60,30 @@ fun Lp3KeyboardWrapper(
         viewModel,
         viewModel,
         handleHardwareKeyboardInput,
-        remapKeyCode
+        remapKeyCode,
+        onOverlayDismissed = {
+            if (dictationState !is DictationState.Idle) {
+                viewModel.setDictationState(DictationState.Idle)
+            } else if (suggestions.isNotEmpty()) {
+                viewModel.setSuggestions(emptyList())
+            } else {
+                viewModel.onSpecialKeyReleased(SpecialKey.Close)
+            }
+        },
+        overlay = when {
+            dictationState !is DictationState.Idle -> {
+                { VoiceListeningOverlay(dictationState) }
+            }
+            suggestions.isNotEmpty() -> {
+                { 
+                    SuggestionsOverlay(
+                        suggestions = suggestions,
+                        onSuggestionClick = { viewModel.onSuggestionSelected(it) }
+                    ) 
+                }
+            }
+            else -> null
+        }
     )
 }
 

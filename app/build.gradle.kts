@@ -51,5 +51,6 @@ dependencies {
     androidTestImplementation(libs.androidx.espresso.core)
     implementation(libs.androidx.lifecycle.service)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation("com.alphacephei:vosk-android:0.3.47")
     api(project(":ui"))
 }

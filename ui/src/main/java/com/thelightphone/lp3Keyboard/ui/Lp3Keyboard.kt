@@ -6,7 +6,11 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitHorizontalTouchSlopOrCancellation
+import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,6 +30,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -88,6 +93,7 @@ interface Lp3KeyboardCallback {
     fun onKeyLongPressed(code: Int)
     fun onSpecialKeyLongPressed(key: SpecialKey)
     fun onSubmitWord(word: CharSequence)
+    fun onCursorMove(delta: Int) {}
 
     // Pointer left the key bounds before lifting. Clean up / do not treat as tap
     fun onKeyCancelled(code: Int) = onKeyReleased(code)
@@ -365,11 +371,16 @@ fun RowScope.IconKey(
 
 
 @Composable
-fun RowScope.SpaceBar(callback: Lp3KeyboardCallback, width: Dp, enableKeyAnimation: Boolean) {
+fun RowScope.SpaceBar(
+    callback: Lp3KeyboardCallback,
+    width: Dp,
+    enableKeyAnimation: Boolean
+) {
     var pressed by remember { mutableStateOf(false) }
     val onPressed = remember(callback) { { callback.onSpecialKeyPressed(SpecialKey.Space) } }
     val onReleased = remember(callback) { { callback.onSpecialKeyReleased(SpecialKey.Space) } }
     val onLongPressed = remember(callback) { { callback.onSpecialKeyLongPressed(SpecialKey.Space) } }
+
     Box(
         Modifier
             .fillMaxHeight()
@@ -381,7 +392,8 @@ fun RowScope.SpaceBar(callback: Lp3KeyboardCallback, width: Dp, enableKeyAnimati
                 onReleased = onReleased,
                 onLongPressed = onLongPressed,
                 onPressedChanged = { pressed = it }
-            ).then(
+            )
+            .then(
                 if (enableKeyAnimation) {
                     Modifier.graphicsLayer {
                         val isPressed = pressed

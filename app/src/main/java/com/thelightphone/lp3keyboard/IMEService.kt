@@ -1,14 +1,22 @@
 package com.thelightphone.lp3keyboard
 
 import android.content.SharedPreferences
+import android.content.pm.PackageManager
+import android.os.VibrationEffect
 import android.os.Vibrator
 import android.view.View
 import android.view.inputmethod.EditorInfo
+import android.view.textservice.SentenceSuggestionsInfo
+import android.view.textservice.SpellCheckerSession
+import android.view.textservice.SpellCheckerSession.SpellCheckerSessionListener
+import android.view.textservice.SuggestionsInfo
+import android.view.textservice.TextServicesManager
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
+import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.SavedStateRegistry
@@ -18,24 +26,54 @@ import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.thelightphone.lp3Keyboard.ui.Lp3KeyboardSwipeCallback
 import com.thelightphone.lp3Keyboard.ui.Lp3KeyboardView
 import com.thelightphone.lp3Keyboard.ui.SpecialKey
+import com.thelightphone.lp3Keyboard.ui.KeyboardOptions
 import com.thelightphone.lp3Keyboard.ui.layout.LayoutRegistryItem
 import com.thelightphone.lp3Keyboard.ui.layout.buildRootViewModel
+import com.thelightphone.lp3Keyboard.ui.viewmodel.DictationState
 import com.thelightphone.lp3Keyboard.ui.viewmodel.Lp3KeyboardViewModel
 import com.thelightphone.lp3Keyboard.ui.viewmodel.Lp3RepeatableKeyboardCallback
+import com.thelightphone.lp3Keyboard.ui.viewmodel.defaultEmojis
+import com.thelightphone.lp3keyboard.voice.VoiceDictation
+import com.thelightphone.lp3keyboard.voice.VoiceModel
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
+import android.Manifest
+import android.content.Intent
+import java.util.Locale
 
 class IMEService : LifecycleInputMethodService(),
     ViewModelStoreOwner,
     SavedStateRegistryOwner,
-    Lp3RepeatableKeyboardCallback {
+    Lp3RepeatableKeyboardCallback,
+    SpellCheckerSessionListener {
 
     private var renderedLayout: LayoutRegistryItem? = null
     private var viewModel: Lp3KeyboardViewModel<*>? = null
+    private var voice: VoiceDictation? = null
+    private var spell: SpellCheckerSession? = null
+
+    private val corrections = mutableMapOf<String, String>()
+    private val suggestionsMap = mutableMapOf<String, List<String>>()
+    private val pending = mutableMapOf<Int, String>()
+    private var seq = 0
+
+    private var undoFrom = ""
+    private var undoTo = ""
+    private var lateWord = ""
+    private var lateTerminator = ""
+    private var selectedWord = ""
+    private var composingWord = ""
+
+    private var lastSpaceTime = 0L
 
     private var layoutPrefs: SharedPreferences? = null
     private val layoutChangeListener =
         SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == LayoutPreferences.KEY_ACTIVE_LAYOUT) {
-                refreshLayoutIfNeeded()
+            when (key) {
+                LayoutPreferences.KEY_ACTIVE_LAYOUT -> refreshLayoutIfNeeded()
+                LayoutPreferences.KEY_VOICE_ENABLED -> voice?.prepare()
+                LayoutPreferences.KEY_AUTOCORRECT_ENABLED -> initSpell()
+                LayoutPreferences.KEY_AUTO_CAPITALIZE_ENABLED -> updateCapsMode()
             }
         }
 
@@ -58,8 +96,17 @@ class IMEService : LifecycleInputMethodService(),
             }
         }
         // Key by the layout's uniqueId so each layout gets its own retained ViewModel instance.
-        return ViewModelProvider(store, factory)[layout.uniqueId, ViewModel::class.java]
+        val vm = ViewModelProvider(store, factory)[layout.uniqueId, ViewModel::class.java]
                 as Lp3KeyboardViewModel<*>
+
+        // Listen for dictation state changes from the UI
+        vm.dictationStateFlow.onEach { state ->
+            if (state is DictationState.Idle) {
+                stopVoice()
+            }
+        }.launchIn(lifecycleScope)
+
+        return vm
     }
 
     override fun onCreateInputView(): View {
@@ -91,15 +138,147 @@ class IMEService : LifecycleInputMethodService(),
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
         refreshLayoutIfNeeded()
+        initSpell()
+        undoFrom = ""
+        undoTo = ""
+        lateWord = ""
+        lateTerminator = ""
+        composingWord = ""
+        corrections.clear()
+        suggestionsMap.clear()
+        pending.clear()
+        viewModel?.setSuggestions(emptyList())
+    }
+
+    private fun initSpell() {
+        if (!LayoutPreferences.isAutocorrectEnabled(this)) {
+            spell?.close()
+            spell = null
+            return
+        }
+        if (spell != null) return
+        val tsm = getSystemService(TextServicesManager::class.java) ?: return
+        spell = tsm.newSpellCheckerSession(null, Locale.getDefault(), this, false)
+    }
+
+    override fun onGetSuggestions(results: Array<out SuggestionsInfo>?) {
+        results?.forEach { si ->
+            val word = pending.remove(si.cookie) ?: return@forEach
+            val fix = pickFix(si)
+            if (fix != null) {
+                corrections[word] = fix
+            }
+            
+            val list = mutableListOf<String>()
+            for (i in 0 until si.suggestionsCount) {
+                list.add(si.getSuggestionAt(i))
+            }
+            if (list.isNotEmpty()) {
+                suggestionsMap[word.lowercase(Locale.getDefault())] = list
+            }
+
+            if (word == lateWord && fix != null) {
+                applyLateFix(word, fix, lateTerminator)
+            }
+            
+            // Only show suggestions overlay if the selected word is actually a typo
+            if (word.equals(selectedWord, ignoreCase = true) && fix != null) {
+                viewModel?.setSuggestions(list)
+            }
+        }
+    }
+
+    override fun onGetSentenceSuggestions(results: Array<out SentenceSuggestionsInfo>?) {
+    }
+
+    private fun pickFix(si: SuggestionsInfo): String? {
+        val attr = si.suggestionsAttributes
+        val typo = (attr and SuggestionsInfo.RESULT_ATTR_LOOKS_LIKE_TYPO) != 0
+        val inDict = (attr and SuggestionsInfo.RESULT_ATTR_IN_THE_DICTIONARY) != 0
+        if (!typo || inDict || si.suggestionsCount <= 0) return null
+        return si.getSuggestionAt(0)
+    }
+
+    private fun applyLateFix(word: String, fix: String, terminator: String) {
+        val ic = currentInputConnection ?: return
+        val expected = word + terminator
+        val actual = ic.getTextBeforeCursor(expected.length, 0)
+        if (actual == expected) {
+            val corrected = applyCase(word, fix)
+            ic.deleteSurroundingText(expected.length, 0)
+            ic.commitText(corrected + terminator, 1)
+            undoFrom = corrected
+            undoTo = word
+        }
+        lateWord = ""
+        lateTerminator = ""
+    }
+
+    private fun applyCase(original: String, fix: String): String {
+        return when {
+            original.all { it.isUpperCase() } -> fix.uppercase(Locale.getDefault())
+            original.firstOrNull()?.isUpperCase() == true -> fix.replaceFirstChar { it.uppercaseChar() }
+            else -> fix.lowercase(Locale.getDefault())
+        }
+    }
+
+    private fun requestCheck(word: String) {
+        val s = spell ?: return
+        if (word.length < 2 || word.length > 32 || word.any { it.isDigit() }) return
+        // Ignore acronyms (mid-word caps)
+        if (word.drop(1).any { it.isUpperCase() }) return
+
+        val c = ++seq
+        pending[c] = word
+        s.getSuggestions(android.view.textservice.TextInfo(word, c, c), 3)
+    }
+
+    private fun trailingWord(): String {
+        val ic = currentInputConnection ?: return ""
+        val before = ic.getTextBeforeCursor(50, 0) ?: return ""
+        // Trim trailing non-letters to find the word being typed
+        val lastWord = before.trimEnd { !it.isLetter() }.split(Regex("[^\\p{L}]")).lastOrNull() ?: ""
+        return lastWord
+    }
+
+    private fun attemptAutocorrect(terminator: String) {
+        val ic = currentInputConnection ?: return
+        if (!LayoutPreferences.isAutocorrectEnabled(this)) {
+            ic.commitText(terminator, 1)
+            updateCapsMode()
+            return
+        }
+        val word = trailingWord()
+        if (word.isEmpty()) {
+            ic.commitText(terminator, 1)
+            updateCapsMode()
+            return
+        }
+
+        val fix = corrections[word]
+        if (fix != null) {
+            val corrected = applyCase(word, fix)
+            ic.deleteSurroundingText(word.length, 0)
+            ic.commitText(corrected + terminator, 1)
+            undoFrom = corrected
+            undoTo = word
+        } else {
+            lateWord = word
+            lateTerminator = terminator
+            ic.commitText(terminator, 1)
+        }
+        updateCapsMode()
     }
 
     override fun onCreate() {
         super.onCreate()
         savedStateRegistryController.performRestore(null)
         layoutPrefs = LayoutPreferences.registerOnChange(this, layoutChangeListener)
+        voice = VoiceDictation(this).apply { prepare() }
     }
 
     override fun onDestroy() {
+        voice?.destroy()
         layoutPrefs?.unregisterOnSharedPreferenceChangeListener(layoutChangeListener)
         store.clear()
         super.onDestroy()
@@ -115,7 +294,7 @@ class IMEService : LifecycleInputMethodService(),
 
     private fun tick() {
         // 50ms feels good on LP3, other device motors may allow faster buzz
-        vibrator.vibrate(50)
+        vibrator.vibrate(VibrationEffect.createOneShot(50, VibrationEffect.DEFAULT_AMPLITUDE))
     }
 
     private val savedStateRegistryController = SavedStateRegistryController.create(this)
@@ -132,35 +311,141 @@ class IMEService : LifecycleInputMethodService(),
         updateCapsMode()
     }
 
+    override fun onUpdateSelection(
+        oldSelStart: Int, oldSelEnd: Int,
+        newSelStart: Int, newSelEnd: Int,
+        candidatesStart: Int, candidatesEnd: Int
+    ) {
+        super.onUpdateSelection(oldSelStart, oldSelEnd, newSelStart, newSelEnd, candidatesStart, candidatesEnd)
+        updateCapsMode()
+        
+        // If the cursor moved away from our composing region, reset it
+        if (composingWord.isNotEmpty() && candidatesStart == -1) {
+            composingWord = ""
+        }
+
+        // Only show suggestions if we are NOT currently typing a word (composing)
+        if (composingWord.isNotEmpty()) {
+            selectedWord = ""
+            viewModel?.setSuggestions(emptyList())
+            return
+        }
+
+        // If selection is a word, show suggestions
+        if (newSelStart != newSelEnd) {
+            val ic = currentInputConnection ?: return
+            val selection = ic.getSelectedText(0)?.toString()?.trim()
+            if (!selection.isNullOrBlank() && !selection.contains(" ")) {
+                selectedWord = selection
+                val list = suggestionsMap[selection.lowercase(Locale.getDefault())]
+                val isTypo = corrections.containsKey(selection)
+                
+                if (!list.isNullOrEmpty() && isTypo) {
+                    viewModel?.setSuggestions(list)
+                } else {
+                    // Check if it's a typo before showing the overlay
+                    requestCheck(selection)
+                }
+            } else {
+                selectedWord = ""
+            }
+        } else {
+            selectedWord = ""
+            viewModel?.setSuggestions(emptyList())
+        }
+    }
+
+    override fun onEvaluateFullscreenMode(): Boolean {
+        return false
+    }
+
+    override fun onEvaluateInputViewShown(): Boolean {
+        super.onEvaluateInputViewShown()
+        return true
+    }
+
     private fun updateCapsMode() {
         val ic = currentInputConnection ?: return
         val ei = currentInputEditorInfo ?: return
+
+        if (!LayoutPreferences.isAutoCapitalizeEnabled(this)) {
+            viewModel?.setCapsMode(false)
+            return
+        }
+
         // might be set if the TextField is set to capitalize sentence starts, for example
         val caps = ic.getCursorCapsMode(ei.inputType)
         viewModel?.setCapsMode(caps != 0)
     }
 
     override fun onKeyPressed(code: Int) {
+        undoFrom = ""
+        viewModel?.setSuggestions(emptyList())
     }
 
     override fun onSubmitWord(word: CharSequence) {
-        currentInputConnection?.commitText("$word ", 1)
+        val ic = currentInputConnection ?: return
+        ic.finishComposingText()
+        composingWord = ""
+        val selection = ic.getSelectedText(0)
+        if (!selection.isNullOrEmpty()) {
+            ic.commitText(word, 1)
+        } else {
+            ic.commitText("$word ", 1)
+        }
+        undoFrom = ""
+        viewModel?.setSuggestions(emptyList())
     }
 
     override fun onSpecialKeyPressed(key: SpecialKey) {
+        if (key != SpecialKey.Backspace) undoFrom = ""
+        viewModel?.setSuggestions(emptyList())
         when (key) {
             SpecialKey.Space -> {
-                currentInputConnection?.commitText(" ", 1)
-                updateCapsMode()
+                currentInputConnection?.finishComposingText()
+                composingWord = ""
+                if (attemptAutoPeriod()) return
+                attemptAutocorrect(" ")
             }
 
             else -> {}
         }
     }
 
+    private fun attemptAutoPeriod(): Boolean {
+        if (!LayoutPreferences.isAutoPeriodEnabled(this)) return false
+        val now = System.currentTimeMillis()
+        val ic = currentInputConnection ?: return false
+        
+        // Double tap within 300ms
+        if (now - lastSpaceTime < 300) {
+            val before = ic.getTextBeforeCursor(2, 0)
+            if (before?.length == 1 && before[0] == ' ') {
+                ic.deleteSurroundingText(1, 0)
+                ic.commitText(". ", 1)
+                lastSpaceTime = 0L
+                updateCapsMode()
+                return true
+            }
+        }
+        
+        lastSpaceTime = now
+        return false
+    }
+
     override fun onKeyReleased(code: Int) {
+        val ic = currentInputConnection ?: return
         val text = buildString { appendCodePoint(code) }
-        currentInputConnection?.commitText(text, 1)
+        val terminators = ".,!?;:)"
+        if (terminators.contains(text)) {
+            ic.finishComposingText()
+            composingWord = ""
+            attemptAutocorrect(text)
+        } else {
+            composingWord += text
+            ic.setComposingText(composingWord, 1)
+            requestCheck(composingWord)
+        }
         updateCapsMode()
     }
 
@@ -168,23 +453,86 @@ class IMEService : LifecycleInputMethodService(),
         when (key) {
             SpecialKey.Backspace -> {
                 val ic = currentInputConnection ?: return
-                val before = ic.getTextBeforeCursor(1, 0)
-                val charsToDelete =
-                    if (!before.isNullOrEmpty() && Character.isLowSurrogate(before[0])) 2 else 1
-                ic.deleteSurroundingText(charsToDelete, 0)
+                if (undoFrom.isNotEmpty()) {
+                    val actual = ic.getTextBeforeCursor(undoFrom.length, 0)
+                    if (actual == undoFrom) {
+                        ic.deleteSurroundingText(undoFrom.length, 0)
+                        ic.commitText(undoTo, 1)
+                        undoFrom = ""
+                        return
+                    }
+                }
+                undoFrom = ""
+                
+                if (composingWord.isNotEmpty()) {
+                    composingWord = composingWord.dropLast(1)
+                    if (composingWord.isEmpty()) {
+                        ic.commitText("", 1)
+                    } else {
+                        ic.setComposingText(composingWord, 1)
+                    }
+                } else {
+                    sendDownUpKeyEvents(android.view.KeyEvent.KEYCODE_DEL)
+                }
                 updateCapsMode()
             }
 
             SpecialKey.Return -> {
-                currentInputConnection?.commitText("\n", 1)
+                attemptAutocorrect("\n")
             }
 
             SpecialKey.Close -> {
                 requestHideSelf(0)
             }
 
+            SpecialKey.Voice -> {
+                onMic()
+            }
+
             else -> {}
         }
+    }
+
+    private fun onMic() {
+        if (!LayoutPreferences.isVoiceEnabled(this)) return
+
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            val intent = Intent(this, MicPermissionActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            startActivity(intent)
+            return
+        }
+
+        if (!VoiceModel.isInstalled(this)) {
+            viewModel?.setDictationState(DictationState.Error("Voice not downloaded"))
+            return
+        }
+
+        startVoice()
+    }
+
+    private fun startVoice() {
+        val vm = viewModel ?: return
+        val v = voice ?: return
+
+        vm.setDictationState(DictationState.Loading)
+        v.listen(
+            onPartial = { partial ->
+                vm.setDictationState(DictationState.Listening(partial))
+            },
+            onSegment = { text ->
+                currentInputConnection?.commitText("$text ", 1)
+                vm.setDictationState(DictationState.Listening(""))
+            },
+            onError = { err ->
+                vm.setDictationState(DictationState.Error(err))
+            }
+        )
+    }
+
+    private fun stopVoice() {
+        voice?.stop()
     }
 
     override fun onKeyLongPressed(code: Int) {
@@ -192,13 +540,18 @@ class IMEService : LifecycleInputMethodService(),
 
     private fun deletePrecedingWord() {
         val ic = currentInputConnection ?: return
-        // Get text before cursor to find the word boundary (max 100 chars long)
-        val before = ic.getTextBeforeCursor(100, 0) ?: return
-        val trimmed = before.trimEnd()
-        val lastSpace = trimmed.indexOfLast { it.isWhitespace() }
-        // Delete from cursor back to start of word (including trailing spaces)
-        val charsToDelete = before.length - (if (lastSpace >= 0) lastSpace + 1 else 0)
-        ic.deleteSurroundingText(charsToDelete, 0)
+        val selection = ic.getSelectedText(0)
+        if (!selection.isNullOrEmpty()) {
+            ic.commitText("", 1)
+        } else {
+            // Get text before cursor to find the word boundary (max 100 chars long)
+            val before = ic.getTextBeforeCursor(100, 0) ?: return
+            val trimmed = before.trimEnd()
+            val lastSpace = trimmed.indexOfLast { it.isWhitespace() }
+            // Delete from cursor back to start of word (including trailing spaces)
+            val charsToDelete = before.length - (if (lastSpace >= 0) lastSpace + 1 else 0)
+            ic.deleteSurroundingText(charsToDelete, 0)
+        }
         updateCapsMode()
     }
 
@@ -228,6 +581,20 @@ class IMEService : LifecycleInputMethodService(),
             }
 
             else -> {}
+        }
+    }
+
+    override fun onCursorMove(delta: Int) {
+        val ic = currentInputConnection ?: return
+        if (composingWord.isNotEmpty()) {
+            ic.finishComposingText()
+            composingWord = ""
+        }
+        val key = if (delta > 0) android.view.KeyEvent.KEYCODE_DPAD_RIGHT else android.view.KeyEvent.KEYCODE_DPAD_LEFT
+        val count = Math.abs(delta)
+        for (i in 0 until count) {
+            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, key))
+            ic.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, key))
         }
     }
 }

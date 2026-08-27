@@ -56,6 +56,23 @@ abstract class EnBaseViewModel<SwipeResult>(
 
     override val layoutFlow: MutableStateFlow<Layout> = MutableStateFlow(initialLayout)
 
+    override val dictationStateFlow: MutableStateFlow<DictationState> = MutableStateFlow(DictationState.Idle)
+
+    override val suggestionsFlow: MutableStateFlow<List<String>> = MutableStateFlow(emptyList())
+
+    override fun setDictationState(state: DictationState) {
+        dictationStateFlow.value = state
+    }
+
+    override fun setSuggestions(suggestions: List<String>) {
+        suggestionsFlow.value = suggestions
+    }
+
+    override fun onSuggestionSelected(suggestion: String) {
+        passedCallback.onSubmitWord(suggestion)
+        setSuggestions(emptyList())
+    }
+
     private fun setLayout(layout: Layout) {
         previousLayout = layoutFlow.value
         layoutOptionsFlow.value = optionsForLayout(layout)
