@@ -103,7 +103,7 @@ fun Lp3SetupScreen() {
             .padding(horizontal = 34.dp, vertical = 24.dp)
     ) {
         Text(
-            text = "LPIII Keyboard",
+            text = "SuperLight Keyboard",
             style = TextStyle(
                 color = LightWhite,
                 fontSize = 28.sp,

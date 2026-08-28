@@ -29,7 +29,7 @@
         <service
             android:name=".IMEService"
             android:exported="false"
-            android:label="Lp3 Keyboard"
+            android:label="SuperLight Keyboard"
             android:permission="android.permission.BIND_INPUT_METHOD"
             android:supportsSwitchingToNextInputMethod="false">
             <intent-filter>
