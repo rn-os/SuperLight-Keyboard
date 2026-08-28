@@ -66,5 +66,5 @@ dependencies {
     implementation(libs.androidx.media3.session)
     lintChecks(project(":lint-rules"))
 
-    testImplementation(libs.kotlin.test)
+    testImplementation(libs.kotlin.test.junit)
 }

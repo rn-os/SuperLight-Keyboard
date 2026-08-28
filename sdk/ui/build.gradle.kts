@@ -20,6 +20,10 @@ android {
         sourceCompatibility = JavaVersion.toVersion(rootProject.extra["jvmTarget"] as String)
         targetCompatibility = JavaVersion.toVersion(rootProject.extra["jvmTarget"] as String)
     }
+
+    publishing {
+        singleVariant("release")
+    }
 }
 
 kotlin {
@@ -53,13 +57,13 @@ dependencies {
     implementation(libs.androidx.camera.view)
     implementation(libs.androidx.camera.mlkit.vision)
     implementation(libs.mlkit.barcode.scanning)
-    api(platform(libs.compose-bom))
-    api(libs.compose-ui)
-    api(libs.compose-ui-graphics)
-    api(libs.compose-foundation)
-    api(libs.compose-material3)
-    api(libs.compose-runtime)
-    debugApi(libs.compose-ui-tooling)
-    api(libs.compose-ui-tooling-preview)
-    testImplementation(libs.kotlin-test)
+    api(platform(libs.compose.bom))
+    api(libs.compose.ui)
+    api(libs.compose.ui.graphics)
+    api(libs.compose.foundation)
+    api(libs.compose.material3)
+    api(libs.compose.runtime)
+    debugApi(libs.compose.ui.tooling)
+    api(libs.compose.ui.tooling.preview)
+    testImplementation(libs.kotlin.test.junit)
 }

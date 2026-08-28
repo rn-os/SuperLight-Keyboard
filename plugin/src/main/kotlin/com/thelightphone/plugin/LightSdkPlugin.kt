@@ -58,8 +58,10 @@ class LightSdkPlugin : Plugin<Project> {
         val INTERNAL_CONFIG_PREFIXES = listOf(
             "_internal-",
             "androidJdk",
+            "androidLintTool",
             "composeMappingProducer",
             "kotlin-extension",
+            "kotlinAbiValidationCompatClasspath",
             "kotlinBuildTools",
             "kotlinCompiler",
             "kotlinKlib",
@@ -68,6 +70,7 @@ class LightSdkPlugin : Plugin<Project> {
             "kspPlugin",
             "lintChecks",
             "lintPublish",
+            "unified-test-platform",
         )
 
         val ALLOWED_KSP_PROCESSORS = setOf(
