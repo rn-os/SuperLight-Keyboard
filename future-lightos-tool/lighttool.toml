@@ -1,0 +1,8 @@
+[tool]
+id = "com.thelightphone.lp3keyboard"
+label = "SuperLight Keyboard"
+versionCode = 1
+versionName = "1.0.0"
+permissions = ["android.permission.RECORD_AUDIO", "android.permission.INTERNET", "android.permission.ACCESS_NETWORK_STATE"]
+capabilities = []
+serverPackage = "com.thelightphone.sdk.emulator"
