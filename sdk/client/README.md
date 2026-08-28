@@ -353,6 +353,26 @@ val result = callRemoteServiceMethod(
 result.error?.let { Log.e(TAG, "code=${it.code}") }
 ```
 
+### Clipboard
+
+Android apps and LightOS do not share a clipboard - copying text in an Android app does not make it
+available on LightOS, and vice versa. `getLightClipboard()`/`setLightClipboard(text)` in `:sdk:client`
+call the new `GetClipboard`/`SetClipboard` `LightServiceMethod`s to read or write LightOS's own clipboard;
+pair them with Compose's `LocalClipboard` (not `Context.getSystemService`, which the plugin's dependency
+validator blocks) to read or write the Android-side clipboard:
+
+```kotlin
+val clipboard = LocalClipboard.current
+val androidText = clipboard.getClipEntry()?.clipData?.getItemAt(0)?.text?.toString()
+if (androidText != null) setLightClipboard(androidText)
+```
+
+`SendAndroidClipboardToLightOsRow` and `PullLightOsClipboardToAndroidRow` wrap this into ready-made
+tappable rows you can drop into a screen. Both are a manual, one-shot bridge, not a live sync, and both
+require the LightOS server the tool is running against to implement `GetClipboard`/`SetClipboard` -
+an older server will report an unknown-method error, which the helpers surface via their `onResult`
+callback rather than throwing.
+
 ### Tool entry point (optional)
 
 If your tool needs to do work outside the scope of a specific screen, write a Kotlin `object` that implements `LightEntryPoint` and annotate the class with `@EntryPoint`:

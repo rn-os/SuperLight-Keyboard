@@ -144,6 +144,35 @@ sealed interface LightServiceMethod<TRequest, TResponse> {
             val phoneNumber: String,
         )
     }
+
+    /**
+     * Reads whatever text is currently on LightOS's own clipboard, independent
+     * of the Android-side [android.content.ClipboardManager] (the two are not
+     * automatically synced). Requires LightOS server support for this method;
+     * older servers will return an unknown-method error.
+     */
+    object GetClipboard : LightServiceMethod<Unit, GetClipboard.Response> {
+        override val id = "GetClipboard"
+        override val requestSerializer = serializer<Unit>()
+        override val responseSerializer = serializer<Response>()
+
+        @Serializable
+        data class Response(val text: String?)
+    }
+
+    /**
+     * Writes text to LightOS's own clipboard so it's available to LightOS-side
+     * apps, independent of the Android-side clipboard. Requires LightOS server
+     * support for this method; older servers will return an unknown-method error.
+     */
+    object SetClipboard : LightServiceMethod<SetClipboard.Request, Unit> {
+        override val id = "SetClipboard"
+        override val requestSerializer = serializer<Request>()
+        override val responseSerializer = serializer<Unit>()
+
+        @Serializable
+        data class Request(val text: String)
+    }
 }
 
 val allMethods: Map<String, LightServiceMethod<*, *>> = listOf(
@@ -156,4 +185,6 @@ val allMethods: Map<String, LightServiceMethod<*, *>> = listOf(
     LightServiceMethod.DeviceKeyEvent,
     LightServiceMethod.GetUserPreferences,
     LightServiceMethod.OpenDialer,
+    LightServiceMethod.GetClipboard,
+    LightServiceMethod.SetClipboard,
 ).associateBy { it.id }
