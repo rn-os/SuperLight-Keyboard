@@ -22,6 +22,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Lp3Keyboard"
+rootProject.name = "SuperLight-Keyboard"
 include(":app")
 include(":ui")
