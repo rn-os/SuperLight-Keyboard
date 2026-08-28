@@ -17,7 +17,7 @@ android {
         applicationId = "com.thelightphone.lp3keyboard"
         minSdk = 33
         targetSdk = 36
-        versionCode = 1
+        versionCode = 2
         versionName = providers.gradleProperty("projectVersion").get()
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -26,6 +26,12 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = false
+            // Signed with the debug keystore so it matches the key the
+            // existing public release was signed with (there is no
+            // dedicated release keystore in this repo) - this keeps
+            // release APKs installable as an in-place update rather than
+            // requiring existing users to uninstall first.
+            signingConfig = signingConfigs.getByName("debug")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
