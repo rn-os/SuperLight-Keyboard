@@ -94,6 +94,16 @@ abstract class EnBaseViewModel<SwipeResult>(
         hideClipboard()
     }
 
+    override fun setNumericPadActive(active: Boolean) {
+        if (active) {
+            if (layoutFlow.value !== EnShared.NumberPadLayout) {
+                setLayout(EnShared.NumberPadLayout)
+            }
+        } else if (layoutFlow.value === EnShared.NumberPadLayout) {
+            showAlphabetLayout()
+        }
+    }
+
     private fun setLayout(layout: Layout) {
         previousLayout = layoutFlow.value
         layoutOptionsFlow.value = optionsForLayout(layout)

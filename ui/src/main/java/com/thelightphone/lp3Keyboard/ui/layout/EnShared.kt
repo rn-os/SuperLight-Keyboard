@@ -1,16 +1,22 @@
 package com.thelightphone.lp3Keyboard.ui.layout
 
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.thelightphone.lp3Keyboard.ui.DefaultRow
 import com.thelightphone.lp3Keyboard.ui.FinalRow
 import com.thelightphone.lp3Keyboard.ui.FirstRow
+import com.thelightphone.lp3Keyboard.ui.IconKey
 import com.thelightphone.lp3Keyboard.ui.Key
 import com.thelightphone.lp3Keyboard.ui.KeyboardOptions
+import com.thelightphone.lp3Keyboard.ui.LP3_KEYBOARD_HEIGHT_DP
 import com.thelightphone.lp3Keyboard.ui.Lp3KeyboardCallback
 import com.thelightphone.lp3Keyboard.ui.MEDIUM_KEY_WIDTH_DP
 import com.thelightphone.lp3Keyboard.ui.MultiLabelKey
+import com.thelightphone.lp3Keyboard.ui.R
 import com.thelightphone.lp3Keyboard.ui.SecondRow
 import com.thelightphone.lp3Keyboard.ui.SpecialKey
 import com.thelightphone.lp3Keyboard.ui.ThirdRow
@@ -30,6 +36,53 @@ object EnShared {
             }
             FinalRow(options, callback) {
                 MultiLabelKey("ABC", SpecialKey.Letters, callback, options.enableKeyAnimation)
+            }
+        }
+    }
+
+    /**
+     * A dedicated 3x4 numeric keypad, shown automatically by the IME when the
+     * focused field's EditorInfo declares a numeric input class - never
+     * reached through the normal Letters/Numbers/Symbols toggle chain, so it
+     * has no ABC/space/return keys of its own (dismiss is still available via
+     * the existing overlay close chevron, same as every other root layout).
+     */
+    object NumberPadLayout : Layout {
+        override val isRootLayout: Boolean get() = true
+
+        @Composable
+        override fun ColumnScope.Render(
+            options: KeyboardOptions,
+            callback: Lp3KeyboardCallback
+        ) {
+            val rowHeight = (LP3_KEYBOARD_HEIGHT_DP / 4).dp
+            val keyWidth = 116.dp
+
+            DefaultRow(height = rowHeight) {
+                Key('1'.code, callback, swipeConfig, options.enableKeyAnimation, width = keyWidth)
+                Key('2'.code, callback, swipeConfig, options.enableKeyAnimation, width = keyWidth)
+                Key('3'.code, callback, swipeConfig, options.enableKeyAnimation, width = keyWidth)
+            }
+            DefaultRow(height = rowHeight) {
+                Key('4'.code, callback, swipeConfig, options.enableKeyAnimation, width = keyWidth)
+                Key('5'.code, callback, swipeConfig, options.enableKeyAnimation, width = keyWidth)
+                Key('6'.code, callback, swipeConfig, options.enableKeyAnimation, width = keyWidth)
+            }
+            DefaultRow(height = rowHeight) {
+                Key('7'.code, callback, swipeConfig, options.enableKeyAnimation, width = keyWidth)
+                Key('8'.code, callback, swipeConfig, options.enableKeyAnimation, width = keyWidth)
+                Key('9'.code, callback, swipeConfig, options.enableKeyAnimation, width = keyWidth)
+            }
+            DefaultRow(height = rowHeight) {
+                Spacer(Modifier.width(keyWidth))
+                Key('0'.code, callback, swipeConfig, options.enableKeyAnimation, width = keyWidth)
+                IconKey(
+                    R.drawable.back_lp3,
+                    SpecialKey.Backspace,
+                    callback,
+                    options.enableKeyAnimation,
+                    width = keyWidth
+                )
             }
         }
     }

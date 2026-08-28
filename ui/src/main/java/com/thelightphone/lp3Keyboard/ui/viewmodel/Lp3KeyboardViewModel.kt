@@ -30,6 +30,13 @@ interface Lp3KeyboardViewModel<SwipeResultType> : Lp3KeyboardCallback, Lp3Keyboa
     fun showClipboard()
     fun hideClipboard()
     fun onClipboardItemSelected(item: String)
+
+    /**
+     * Called by the IME when the focused field's EditorInfo declares a
+     * numeric input class (or stops), to switch to/from a dedicated numeric
+     * keypad rather than the normal alphabet layout.
+     */
+    fun setNumericPadActive(active: Boolean)
 }
 
 val defaultEmojis = listOf(

@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.os.VibrationEffect
 import android.os.Vibrator
+import android.text.InputType
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.textservice.SentenceSuggestionsInfo
@@ -187,6 +188,14 @@ class IMEService : LifecycleInputMethodService(),
         pending.clear()
         viewModel?.setSuggestions(emptyList())
         viewModel?.hideClipboard()
+        viewModel?.setNumericPadActive(isNumericInputField(info))
+    }
+
+    private fun isNumericInputField(info: EditorInfo?): Boolean {
+        val inputClass = (info?.inputType ?: 0) and InputType.TYPE_MASK_CLASS
+        return inputClass == InputType.TYPE_CLASS_NUMBER ||
+            inputClass == InputType.TYPE_CLASS_PHONE ||
+            inputClass == InputType.TYPE_CLASS_DATETIME
     }
 
     private fun initSpell() {
