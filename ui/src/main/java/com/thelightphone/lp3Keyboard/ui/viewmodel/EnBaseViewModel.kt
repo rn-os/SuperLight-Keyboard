@@ -60,6 +60,10 @@ abstract class EnBaseViewModel<SwipeResult>(
 
     override val suggestionsFlow: MutableStateFlow<List<String>> = MutableStateFlow(emptyList())
 
+    override val clipboardVisibleFlow: MutableStateFlow<Boolean> = MutableStateFlow(false)
+
+    override val clipboardItemsFlow: MutableStateFlow<List<String>> = MutableStateFlow(emptyList())
+
     override fun setDictationState(state: DictationState) {
         dictationStateFlow.value = state
     }
@@ -71,6 +75,23 @@ abstract class EnBaseViewModel<SwipeResult>(
     override fun onSuggestionSelected(suggestion: String) {
         passedCallback.onSubmitWord(suggestion)
         setSuggestions(emptyList())
+    }
+
+    override fun setClipboardItems(items: List<String>) {
+        clipboardItemsFlow.value = items
+    }
+
+    override fun showClipboard() {
+        clipboardVisibleFlow.value = true
+    }
+
+    override fun hideClipboard() {
+        clipboardVisibleFlow.value = false
+    }
+
+    override fun onClipboardItemSelected(item: String) {
+        passedCallback.onPasteText(item)
+        hideClipboard()
     }
 
     private fun setLayout(layout: Layout) {

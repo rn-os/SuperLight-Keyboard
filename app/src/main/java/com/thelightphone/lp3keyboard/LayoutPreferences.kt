@@ -15,12 +15,14 @@ object LayoutPreferences {
     const val KEY_AUTOCORRECT_ENABLED = "autocorrect_enabled"
     const val KEY_AUTO_CAPITALIZE_ENABLED = "auto_capitalize_enabled"
     const val KEY_AUTO_PERIOD_ENABLED = "auto_period_enabled"
+    const val KEY_CLIPBOARD_ENABLED = "clipboard_enabled"
 
     private val DEFAULT_LAYOUT = LayoutRegistryItem.EnQwerty
     private const val DEFAULT_VOICE_ENABLED = false
     private const val DEFAULT_AUTOCORRECT_ENABLED = true
     private const val DEFAULT_AUTO_CAPITALIZE_ENABLED = true
     private const val DEFAULT_AUTO_PERIOD_ENABLED = true
+    private const val DEFAULT_CLIPBOARD_ENABLED = true
 
     private fun prefs(context: Context) =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -60,6 +62,13 @@ object LayoutPreferences {
 
     fun setAutoPeriodEnabled(context: Context, enabled: Boolean) {
         prefs(context).edit().putBoolean(KEY_AUTO_PERIOD_ENABLED, enabled).apply()
+    }
+
+    fun isClipboardEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_CLIPBOARD_ENABLED, DEFAULT_CLIPBOARD_ENABLED)
+
+    fun setClipboardEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_CLIPBOARD_ENABLED, enabled).apply()
     }
 
     fun registerOnChange(

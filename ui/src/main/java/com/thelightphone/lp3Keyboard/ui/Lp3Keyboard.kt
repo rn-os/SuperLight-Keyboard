@@ -95,6 +95,9 @@ interface Lp3KeyboardCallback {
     fun onSubmitWord(word: CharSequence)
     fun onCursorMove(delta: Int) {}
 
+    /** Called when the user taps an item in the clipboard overlay to paste it verbatim. */
+    fun onPasteText(text: CharSequence) {}
+
     // Pointer left the key bounds before lifting. Clean up / do not treat as tap
     fun onKeyCancelled(code: Int) = onKeyReleased(code)
 }

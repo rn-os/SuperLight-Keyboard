@@ -14,6 +14,8 @@ interface Lp3KeyboardViewModel<SwipeResultType> : Lp3KeyboardCallback, Lp3Keyboa
     val layoutOptionsFlow: StateFlow<LayoutOptions>
     val dictationStateFlow: StateFlow<DictationState>
     val suggestionsFlow: StateFlow<List<String>>
+    val clipboardVisibleFlow: StateFlow<Boolean>
+    val clipboardItemsFlow: StateFlow<List<String>>
     fun cancelHeldKeys()
 
     /** Called by the IME after each character to handle system-requested caps. */
@@ -22,6 +24,12 @@ interface Lp3KeyboardViewModel<SwipeResultType> : Lp3KeyboardCallback, Lp3Keyboa
     fun setDictationState(state: DictationState)
     fun setSuggestions(suggestions: List<String>)
     fun onSuggestionSelected(suggestion: String)
+
+    /** Called by the IME whenever the underlying system clipboard changes. */
+    fun setClipboardItems(items: List<String>)
+    fun showClipboard()
+    fun hideClipboard()
+    fun onClipboardItemSelected(item: String)
 }
 
 val defaultEmojis = listOf(

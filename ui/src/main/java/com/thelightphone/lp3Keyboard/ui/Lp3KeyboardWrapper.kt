@@ -53,6 +53,8 @@ fun Lp3KeyboardWrapper(
     val layoutOptions by viewModel.layoutOptionsFlow.collectAsState()
     val dictationState by viewModel.dictationStateFlow.collectAsState()
     val suggestions by viewModel.suggestionsFlow.collectAsState()
+    val clipboardVisible by viewModel.clipboardVisibleFlow.collectAsState()
+    val clipboardItems by viewModel.clipboardItemsFlow.collectAsState()
     Lp3KeyboardWrapper(
         layout,
         keyboardOptions,
@@ -64,6 +66,8 @@ fun Lp3KeyboardWrapper(
         onOverlayDismissed = {
             if (dictationState !is DictationState.Idle) {
                 viewModel.setDictationState(DictationState.Idle)
+            } else if (clipboardVisible) {
+                viewModel.hideClipboard()
             } else if (suggestions.isNotEmpty()) {
                 viewModel.setSuggestions(emptyList())
             } else {
@@ -74,12 +78,20 @@ fun Lp3KeyboardWrapper(
             dictationState !is DictationState.Idle -> {
                 { VoiceListeningOverlay(dictationState) }
             }
+            clipboardVisible -> {
+                {
+                    ClipboardOverlay(
+                        items = clipboardItems,
+                        onItemClick = { viewModel.onClipboardItemSelected(it) }
+                    )
+                }
+            }
             suggestions.isNotEmpty() -> {
-                { 
+                {
                     SuggestionsOverlay(
                         suggestions = suggestions,
                         onSuggestionClick = { viewModel.onSuggestionSelected(it) }
-                    ) 
+                    )
                 }
             }
             else -> null

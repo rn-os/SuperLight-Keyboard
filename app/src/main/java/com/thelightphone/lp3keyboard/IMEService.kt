@@ -1,5 +1,6 @@
 package com.thelightphone.lp3keyboard
 
+import android.content.ClipboardManager
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.os.VibrationEffect
@@ -41,6 +42,8 @@ import android.Manifest
 import android.content.Intent
 import java.util.Locale
 
+private const val MAX_CLIPBOARD_HISTORY = 5
+
 class IMEService : LifecycleInputMethodService(),
     ViewModelStoreOwner,
     SavedStateRegistryOwner,
@@ -65,6 +68,35 @@ class IMEService : LifecycleInputMethodService(),
     private var composingWord = ""
 
     private var lastSpaceTime = 0L
+    private var clipboardOverlayVisible = false
+
+    private var clipboardManager: ClipboardManager? = null
+    private val clipboardHistory = ArrayDeque<String>()
+    private val clipboardListener = ClipboardManager.OnPrimaryClipChangedListener { refreshClipboardHistory() }
+
+    private fun refreshClipboardHistory() {
+        if (!LayoutPreferences.isClipboardEnabled(this)) return
+        val clip = clipboardManager?.primaryClip ?: return
+        if (clip.itemCount == 0) return
+        val text = clip.getItemAt(0).coerceToText(this)?.toString()?.trim().orEmpty()
+        if (text.isEmpty()) return
+        clipboardHistory.remove(text)
+        clipboardHistory.addFirst(text)
+        while (clipboardHistory.size > MAX_CLIPBOARD_HISTORY) {
+            clipboardHistory.removeLast()
+        }
+        viewModel?.setClipboardItems(clipboardHistory.toList())
+    }
+
+    private fun onClipboardEnabledChanged() {
+        if (LayoutPreferences.isClipboardEnabled(this)) {
+            refreshClipboardHistory()
+            return
+        }
+        viewModel?.hideClipboard()
+        clipboardHistory.clear()
+        viewModel?.setClipboardItems(emptyList())
+    }
 
     private var layoutPrefs: SharedPreferences? = null
     private val layoutChangeListener =
@@ -74,6 +106,7 @@ class IMEService : LifecycleInputMethodService(),
                 LayoutPreferences.KEY_VOICE_ENABLED -> voice?.prepare()
                 LayoutPreferences.KEY_AUTOCORRECT_ENABLED -> initSpell()
                 LayoutPreferences.KEY_AUTO_CAPITALIZE_ENABLED -> updateCapsMode()
+                LayoutPreferences.KEY_CLIPBOARD_ENABLED -> onClipboardEnabledChanged()
             }
         }
 
@@ -105,6 +138,11 @@ class IMEService : LifecycleInputMethodService(),
                 stopVoice()
             }
         }.launchIn(lifecycleScope)
+
+        vm.clipboardVisibleFlow.onEach { visible ->
+            clipboardOverlayVisible = visible
+        }.launchIn(lifecycleScope)
+        vm.setClipboardItems(clipboardHistory.toList())
 
         return vm
     }
@@ -148,6 +186,7 @@ class IMEService : LifecycleInputMethodService(),
         suggestionsMap.clear()
         pending.clear()
         viewModel?.setSuggestions(emptyList())
+        viewModel?.hideClipboard()
     }
 
     private fun initSpell() {
@@ -241,6 +280,29 @@ class IMEService : LifecycleInputMethodService(),
         return lastWord
     }
 
+    /**
+     * The return key doubles as "Enter" (submit the field's IME action, e.g.
+     * search/send/go/next/done) and "Return" (insert a newline) depending on
+     * what the focused field asked for - matching every other Android
+     * keyboard rather than always inserting a literal newline.
+     */
+    private fun performReturnAction() {
+        val ei = currentInputEditorInfo
+        val actionId = (ei?.imeOptions ?: EditorInfo.IME_ACTION_NONE) and EditorInfo.IME_MASK_ACTION
+        val noEnterAction = ei != null && (ei.imeOptions and EditorInfo.IME_FLAG_NO_ENTER_ACTION) != 0
+        val hasSubmitAction = actionId != EditorInfo.IME_ACTION_NONE &&
+            actionId != EditorInfo.IME_ACTION_UNSPECIFIED &&
+            !noEnterAction
+
+        if (hasSubmitAction) {
+            currentInputConnection?.finishComposingText()
+            composingWord = ""
+            currentInputConnection?.performEditorAction(actionId)
+        } else {
+            attemptAutocorrect("\n")
+        }
+    }
+
     private fun attemptAutocorrect(terminator: String) {
         val ic = currentInputConnection ?: return
         if (!LayoutPreferences.isAutocorrectEnabled(this)) {
@@ -275,11 +337,16 @@ class IMEService : LifecycleInputMethodService(),
         savedStateRegistryController.performRestore(null)
         layoutPrefs = LayoutPreferences.registerOnChange(this, layoutChangeListener)
         voice = VoiceDictation(this).apply { prepare() }
+        clipboardManager = getSystemService(ClipboardManager::class.java)?.also {
+            it.addPrimaryClipChangedListener(clipboardListener)
+        }
+        refreshClipboardHistory()
     }
 
     override fun onDestroy() {
         voice?.destroy()
         layoutPrefs?.unregisterOnSharedPreferenceChangeListener(layoutChangeListener)
+        clipboardManager?.removePrimaryClipChangedListener(clipboardListener)
         store.clear()
         super.onDestroy()
     }
@@ -381,6 +448,7 @@ class IMEService : LifecycleInputMethodService(),
     override fun onKeyPressed(code: Int) {
         undoFrom = ""
         viewModel?.setSuggestions(emptyList())
+        viewModel?.hideClipboard()
     }
 
     override fun onSubmitWord(word: CharSequence) {
@@ -397,9 +465,19 @@ class IMEService : LifecycleInputMethodService(),
         viewModel?.setSuggestions(emptyList())
     }
 
+    override fun onPasteText(text: CharSequence) {
+        val ic = currentInputConnection ?: return
+        ic.finishComposingText()
+        composingWord = ""
+        ic.commitText(text, 1)
+        undoFrom = ""
+        viewModel?.hideClipboard()
+    }
+
     override fun onSpecialKeyPressed(key: SpecialKey) {
         if (key != SpecialKey.Backspace) undoFrom = ""
         viewModel?.setSuggestions(emptyList())
+        viewModel?.hideClipboard()
         when (key) {
             SpecialKey.Space -> {
                 currentInputConnection?.finishComposingText()
@@ -466,19 +544,38 @@ class IMEService : LifecycleInputMethodService(),
                 
                 if (composingWord.isNotEmpty()) {
                     composingWord = composingWord.dropLast(1)
-                    if (composingWord.isEmpty()) {
-                        ic.commitText("", 1)
-                    } else {
+                    // deleteSurroundingText is defined to leave composing-region
+                    // text alone, so it can't be relied on to remove the
+                    // character while it's still marked as composing. Committing
+                    // it as plain text first (a no-op on the actual characters,
+                    // just drops the composing/underline styling) makes the
+                    // delete land regardless of how well the target field tracks
+                    // composing spans - some don't, at all.
+                    ic.finishComposingText()
+                    ic.deleteSurroundingText(1, 0)
+                    if (composingWord.isNotEmpty()) {
                         ic.setComposingText(composingWord, 1)
                     }
                 } else {
-                    sendDownUpKeyEvents(android.view.KeyEvent.KEYCODE_DEL)
+                    val selection = ic.getSelectedText(0)
+                    if (!selection.isNullOrEmpty()) {
+                        ic.commitText("", 1)
+                    } else {
+                        // deleteSurroundingText, not a raw KEYCODE_DEL key event -
+                        // many apps' text fields only implement InputConnection's
+                        // delete methods and never handle a sent DEL key event.
+                        val before = ic.getTextBeforeCursor(2, 0)
+                        val deleteCount = if (before != null && before.length == 2 &&
+                            Character.isSurrogatePair(before[0], before[1])
+                        ) 2 else 1
+                        ic.deleteSurroundingText(deleteCount, 0)
+                    }
                 }
                 updateCapsMode()
             }
 
             SpecialKey.Return -> {
-                attemptAutocorrect("\n")
+                performReturnAction()
             }
 
             SpecialKey.Close -> {
@@ -561,6 +658,13 @@ class IMEService : LifecycleInputMethodService(),
                 deletePrecedingWord()
             }
 
+            SpecialKey.Space -> {
+                if (LayoutPreferences.isClipboardEnabled(this)) {
+                    refreshClipboardHistory()
+                    viewModel?.showClipboard()
+                }
+            }
+
             else -> {}
         }
     }
@@ -572,6 +676,9 @@ class IMEService : LifecycleInputMethodService(),
     override fun onSpecialKeyRepeated(specialKey: SpecialKey) {
         when (specialKey) {
             SpecialKey.Space -> {
+                // Long-pressing space opens the clipboard overlay instead of
+                // repeating; don't also spam space characters into the field.
+                if (clipboardOverlayVisible) return
                 currentInputConnection?.commitText(" ", 1)
                 updateCapsMode()
             }

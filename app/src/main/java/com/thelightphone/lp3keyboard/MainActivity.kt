@@ -8,6 +8,7 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.view.inputmethod.InputMethodManager
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.Canvas
@@ -15,6 +16,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -39,11 +41,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
@@ -69,11 +69,44 @@ private val LightWhite = Color(0xFFFFFFFF)
 private val LightGray = Color(0xFF999999)
 private val LightRed = Color(0xFFFF4444)
 
+/**
+ * The settings list is split into categories so the top-level screen fits
+ * without much scrolling - each category is its own screen rather than a
+ * nested Column, kept as plain conditional composition (no navigation
+ * library) to match how the rest of this app is built.
+ */
+private enum class SettingsSection(val title: String) {
+    Layout("Keyboard Layout"),
+    Typing("Typing"),
+    Voice("Voice Dictation"),
+}
+
+@Composable
+private fun ScreenScaffold(content: @Composable ColumnScope.() -> Unit) {
+    val scrollState = rememberScrollState()
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(LightBlack)
+            .verticalScroll(scrollState)
+            .padding(horizontal = 34.dp, vertical = 24.dp),
+        content = content
+    )
+}
+
 @Composable
 fun Lp3SetupScreen() {
     val context = LocalContext.current
-    val scrollState = rememberScrollState()
-    
+    var section by remember { mutableStateOf<SettingsSection?>(null) }
+
+    // Without this, the system back gesture/button (which is how an edge-swipe
+    // "back" action from a tool like BrightControl reaches the app) has nothing
+    // to intercept our own `section` state and falls through to closing the
+    // whole Activity instead of returning to the settings list.
+    BackHandler(enabled = section != null) {
+        section = null
+    }
+
     // Track IME status
     var imeEnabled by remember { mutableStateOf(isImeEnabled(context)) }
     var imeDefault by remember { mutableStateOf(isImeDefault(context)) }
@@ -95,100 +128,117 @@ fun Lp3SetupScreen() {
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(LightBlack)
-            .verticalScroll(scrollState)
-            .padding(horizontal = 34.dp, vertical = 24.dp)
-    ) {
-        Text(
-            text = "SuperLight Keyboard",
-            style = TextStyle(
-                color = LightWhite,
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Normal
+    when (val current = section) {
+        null -> ScreenScaffold {
+            Text(
+                text = "SuperLight Keyboard",
+                style = TextStyle(
+                    color = LightWhite,
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Normal
+                )
             )
-        )
-        
-        Spacer(modifier = Modifier.height(8.dp))
-        
-        Text(
-            text = "A faithful recreation of the Light Phone 3 keyboard for use in all your apps.",
-            style = TextStyle(
-                color = LightGray,
-                fontSize = 16.sp
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "A faithful recreation of the Light Phone 3 keyboard for use in all your apps.",
+                style = TextStyle(
+                    color = LightGray,
+                    fontSize = 16.sp
+                )
             )
-        )
 
-        Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
-        // Step 1: Enable
-        SetupStep(
-            number = 1,
-            label = "Enable keyboard",
-            isDone = imeEnabled,
-            onClick = {
-                context.startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS))
+            // Step 1: Enable
+            SetupStep(
+                number = 1,
+                label = "Enable keyboard",
+                isDone = imeEnabled,
+                onClick = {
+                    context.startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS))
+                }
+            )
+
+            // Step 2: Select
+            SetupStep(
+                number = 2,
+                label = "Select keyboard",
+                isDone = imeDefault,
+                onClick = {
+                    val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+                    imm.showInputMethodPicker()
+                }
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Settings
+            Text(
+                text = "Settings",
+                style = TextStyle(color = LightWhite, fontSize = 20.sp, fontWeight = FontWeight.Medium),
+                modifier = Modifier.padding(vertical = 8.dp)
+            )
+
+            SettingsSection.entries.forEach { entry ->
+                CategoryRow(label = entry.title, onClick = { section = entry })
             }
-        )
 
-        // Step 2: Select
-        SetupStep(
-            number = 2,
-            label = "Select keyboard",
-            isDone = imeDefault,
-            onClick = {
-                val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-                imm.showInputMethodPicker()
-            }
-        )
+            Spacer(modifier = Modifier.height(24.dp))
 
-        Spacer(modifier = Modifier.height(24.dp))
+            // Try it out
+            Text(
+                text = "Try the keyboard",
+                style = TextStyle(color = LightWhite, fontSize = 20.sp),
+                modifier = Modifier.padding(vertical = 8.dp)
+            )
 
-        // Settings
-        Text(
-            text = "Settings",
-            style = TextStyle(color = LightWhite, fontSize = 20.sp, fontWeight = FontWeight.Medium),
-            modifier = Modifier.padding(vertical = 8.dp)
-        )
+            var textValue by remember { mutableStateOf(TextFieldValue("")) }
+            TextField(
+                value = textValue,
+                onValueChange = { textValue = it },
+                textStyle = TextStyle(color = LightWhite, fontSize = 20.sp),
+                keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+                modifier = Modifier.fillMaxWidth(),
+                colors = TextFieldDefaults.textFieldColors(
+                    backgroundColor = Color.Transparent,
+                    cursorColor = LightWhite,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                    textColor = LightWhite
+                ),
+                placeholder = {
+                    Text("Type here...", color = LightGray, fontSize = 20.sp)
+                },
+                trailingIcon = {
+                    Text(" ▾", color = LightGray, fontSize = 20.sp)
+                }
+            )
 
-        LayoutSettingRow()
-        
-        VoiceSettingRow()
+            Spacer(modifier = Modifier.height(48.dp))
+        }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        SettingsSection.Layout -> ScreenScaffold {
+            SectionHeader(title = current.title, onBack = { section = null })
+            Spacer(modifier = Modifier.height(16.dp))
+            LayoutOptionsList()
+            Spacer(modifier = Modifier.height(24.dp))
+        }
 
-        // Try it out
-        Text(
-            text = "Try the keyboard",
-            style = TextStyle(color = LightWhite, fontSize = 20.sp),
-            modifier = Modifier.padding(vertical = 8.dp)
-        )
-        
-        var textValue by remember { mutableStateOf(TextFieldValue("")) }
-        TextField(
-            value = textValue,
-            onValueChange = { textValue = it },
-            textStyle = TextStyle(color = LightWhite, fontSize = 20.sp),
-            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-            modifier = Modifier.fillMaxWidth(),
-            colors = TextFieldDefaults.textFieldColors(
-                backgroundColor = Color.Transparent,
-                cursorColor = LightWhite,
-                focusedIndicatorColor = Color.Transparent,
-                unfocusedIndicatorColor = Color.Transparent,
-                textColor = LightWhite
-            ),
-            placeholder = {
-                Text("Type here...", color = LightGray, fontSize = 20.sp)
-            },
-            trailingIcon = {
-                Text(" ▾", color = LightGray, fontSize = 20.sp)
-            }
-        )
-        
-        Spacer(modifier = Modifier.height(48.dp))
+        SettingsSection.Typing -> ScreenScaffold {
+            SectionHeader(title = current.title, onBack = { section = null })
+            Spacer(modifier = Modifier.height(16.dp))
+            TypingSettingsSection()
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+
+        SettingsSection.Voice -> ScreenScaffold {
+            SectionHeader(title = current.title, onBack = { section = null })
+            Spacer(modifier = Modifier.height(16.dp))
+            VoiceSettingsSection()
+            Spacer(modifier = Modifier.height(24.dp))
+        }
     }
 }
 
@@ -215,17 +265,51 @@ fun SetupStep(number: Int, label: String, isDone: Boolean, onClick: () -> Unit) 
 }
 
 @Composable
-fun LayoutSettingRow() {
+fun CategoryRow(label: String, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            style = TextStyle(color = LightWhite, fontSize = 20.sp),
+            modifier = Modifier.weight(1f)
+        )
+        Text(text = "›", color = LightWhite, fontSize = 20.sp)
+    }
+}
+
+@Composable
+fun SectionHeader(title: String, onBack: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onBack)
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = "←",
+            color = LightWhite,
+            fontSize = 20.sp,
+            modifier = Modifier.padding(end = 12.dp)
+        )
+        Text(
+            text = title,
+            style = TextStyle(color = LightWhite, fontSize = 20.sp, fontWeight = FontWeight.Medium)
+        )
+    }
+}
+
+@Composable
+fun LayoutOptionsList() {
     val context = LocalContext.current
     var selectedLayout by remember { mutableStateOf(LayoutPreferences.getActiveLayout(context)) }
-    
-    Column(modifier = Modifier.padding(top = 16.dp)) {
-        Text(
-            text = "Keyboard Layout",
-            style = TextStyle(color = LightWhite, fontSize = 20.sp),
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-        
+
+    Column {
         LayoutRegistryItem.entries.forEach { item ->
             Row(
                 modifier = Modifier
@@ -257,18 +341,14 @@ fun LayoutSettingRow() {
 }
 
 @Composable
-fun VoiceSettingRow() {
+fun TypingSettingsSection() {
     val context = LocalContext.current
-    var voiceEnabled by remember { mutableStateOf(LayoutPreferences.isVoiceEnabled(context)) }
     var autocorrectEnabled by remember { mutableStateOf(LayoutPreferences.isAutocorrectEnabled(context)) }
     var autoCapitalizeEnabled by remember { mutableStateOf(LayoutPreferences.isAutoCapitalizeEnabled(context)) }
     var autoPeriodEnabled by remember { mutableStateOf(LayoutPreferences.isAutoPeriodEnabled(context)) }
-    var isInstalled by remember { mutableStateOf(VoiceModel.isInstalled(context)) }
-    var downloading by remember { mutableStateOf(false) }
-    var progress by remember { mutableFloatStateOf(0f) }
-    var error by remember { mutableStateOf<String?>(null) }
+    var clipboardEnabled by remember { mutableStateOf(LayoutPreferences.isClipboardEnabled(context)) }
 
-    Column(modifier = Modifier.padding(top = 24.dp)) {
+    Column {
         LightToggleRow(
             label = "Autocorrect",
             checked = autocorrectEnabled,
@@ -302,6 +382,27 @@ fun VoiceSettingRow() {
 
         Spacer(modifier = Modifier.height(12.dp))
 
+        LightToggleRow(
+            label = "Copy & Paste Menu",
+            checked = clipboardEnabled,
+            onCheckedChange = {
+                clipboardEnabled = it
+                LayoutPreferences.setClipboardEnabled(context, it)
+            }
+        )
+    }
+}
+
+@Composable
+fun VoiceSettingsSection() {
+    val context = LocalContext.current
+    var voiceEnabled by remember { mutableStateOf(LayoutPreferences.isVoiceEnabled(context)) }
+    var isInstalled by remember { mutableStateOf(VoiceModel.isInstalled(context)) }
+    var downloading by remember { mutableStateOf(false) }
+    var progress by remember { mutableFloatStateOf(0f) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    Column {
         LightToggleRow(
             label = "Voice Dictation",
             checked = voiceEnabled,
@@ -416,7 +517,7 @@ fun LightToggleRow(
 fun LightToggleMark(checked: Boolean, enabled: Boolean) {
     val alpha = if (enabled) 1f else 0.4f
     val color = LightWhite.copy(alpha = alpha)
-    
+
     Canvas(modifier = Modifier.size(width = 32.dp, height = 20.dp)) {
         val cy = size.height / 2f
         val circleDiam = 13.dp.toPx()
