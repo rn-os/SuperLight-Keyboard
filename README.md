@@ -24,7 +24,7 @@ A private, Light Phone 3–style Android system keyboard combining the LPIII Key
 <tr>
 <td><img src="docs/screenshots/keyboard-symbols.png" width="260" alt="Symbols layout"><br><sub>Symbols</sub></td>
 <td><img src="docs/screenshots/keyboard-emoji.png" width="260" alt="Emoji layout"><br><sub>Emoji</sub></td>
-<td><img src="docs/screenshots/keyboard-numpad.png" width="260" alt="Numeric keypad"><br><sub>Numeric keypad</sub></td>
+<td><img src="docs/screenshots/keyboard-numpad.png" width="260" alt="Numeric keypad"><br><sub>Numeric keypad (long-press on lower left numbers)</sub></td>
 </tr>
 <tr>
 <td><img src="docs/screenshots/keyboard-clipboard.png" width="260" alt="Clipboard menu"><br><sub>Copy &amp; paste menu</sub></td>
