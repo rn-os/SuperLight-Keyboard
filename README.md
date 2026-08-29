@@ -43,6 +43,8 @@ Backspace had a run of regressions while the numeric keypad and clipboard menu w
 
 The underline you see under a word while it's still being typed (visible in the screenshots above) is a side effect of that same composing region, and the spelling-suggestions overlay is shown when you select a word that comes back flagged as a typo.
 
+For the full debugging trail behind these fixes - what was tried, why each attempt failed, and a decision guide for the next backspace bug - see [`docs/ime-backspace-debugging.md`](docs/ime-backspace-debugging.md).
+
 ## Install and set up
 
 Download the latest APK from [Releases](../../releases) and open it on your Android device. Then open **Light Keyboard** and:
