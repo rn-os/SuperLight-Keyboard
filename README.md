@@ -28,8 +28,20 @@ A private, Light Phone 3–style Android system keyboard combining the LPIII Key
 </tr>
 <tr>
 <td><img src="docs/screenshots/keyboard-clipboard.png" width="260" alt="Clipboard menu"><br><sub>Copy &amp; paste menu</sub></td>
+<td><img src="docs/screenshots/keyboard-suggestions.png" width="260" alt="Spelling suggestions"><br><sub>Spelling suggestions</sub></td>
 </tr>
 </table>
+
+## Recent fixes (v1.2.3)
+
+Backspace had a run of regressions while the numeric keypad and clipboard menu were being built, across both the numpad and the standard keyboard, in third-party apps in particular. Root causes and fixes:
+
+- **Backspace doing nothing in some apps:** a prior fix had switched deletion from a real key event to `InputConnection.deleteSurroundingText()`. Some apps (particularly ones with custom or cross-platform text fields) never implement that method, so the delete silently no-opped. Restored a real key-event fallback for the cases that need it.
+- **Backspace jumping back several characters, or deleting the wrong spot on the numpad:** typed digits were tracked the same way as letters, through the keyboard's spell-check/autocorrect "composing" region. Numeric fields (phone numbers, dates) commonly reformat text and move the cursor as you type, which drifted that tracked position away from the field's real cursor. Digits are no longer tracked through the composing region at all.
+- **A single backspace occasionally deleting several characters in a row:** a self-check that verified a delete had landed (to decide whether to fall back to the key event above) read the field's text back immediately, but some fields apply edits a frame late. Fast repeated presses could read stale text, wrongly conclude the delete failed, and fire a second delete on top of one that actually landed a moment later. Removed the self-check; deletion is now a single, deterministic step.
+- **A whole word vanishing instead of one character:** composing regions need to be finished before backspace acts on them, or some apps cancel the entire in-progress word on a single delete. Backspace now shrinks the composing region in place with one call instead of finishing it, deleting, and re-establishing it as three separate steps - the sequence that was triggering that cancellation.
+
+The underline you see under a word while it's still being typed (visible in the screenshots above) is a side effect of that same composing region, and the spelling-suggestions overlay is shown when you select a word that comes back flagged as a typo.
 
 ## Install and set up
 

@@ -394,8 +394,10 @@ class IMEService : LifecycleInputMethodService(),
     ) {
         super.onUpdateSelection(oldSelStart, oldSelEnd, newSelStart, newSelEnd, candidatesStart, candidatesEnd)
         updateCapsMode()
-        
-        // If the cursor moved away from our composing region, reset it
+
+        // If the field isn't reporting our composing region as active
+        // anymore (cursor moved away, or the field never tracked it),
+        // stop treating further backspaces as continuing this word.
         if (composingWord.isNotEmpty() && candidatesStart == -1) {
             composingWord = ""
         }
@@ -541,18 +543,19 @@ class IMEService : LifecycleInputMethodService(),
             composingWord = ""
             attemptAutocorrect(text)
         } else {
-            // Plain commitText, not setComposingText: composingWord is our
-            // own internal tracking (for spell-check and backspace) and
-            // never needs to be reflected as an actual composing region in
-            // the field. Composing regions are exactly what make backspace
-            // unreliable - some fields don't track them at all, some cancel
-            // the whole span on a single DEL, some drift the cursor away
-            // from where we think it is. Committing each character as it's
-            // typed sidesteps all of that; autocorrect (attemptAutocorrect)
-            // already works purely off plain committed text via
-            // trailingWord(), so it doesn't need the composing region either.
+            // A real composing region: it's the one thing virtually every
+            // text field renders with an underline (commitText with a
+            // styling span is best-effort and most editors ignore it, as
+            // verified on-device). The bug composing regions caused wasn't
+            // the region itself - it was backspace finishing the region and
+            // then trying to delete + re-establish a new one, a 3-step
+            // sequence some fields mishandle (canceling the whole span on
+            // the delete, or misapplying the delete). Backspace now just
+            // shrinks this same region in place with one setComposingText
+            // call (see onSpecialKeyReleased), never touching
+            // finishComposingText or a raw delete mid-word.
             composingWord += text
-            ic.commitText(text, 1)
+            ic.setComposingText(composingWord, 1)
             requestCheck(composingWord)
         }
         updateCapsMode()
@@ -572,20 +575,28 @@ class IMEService : LifecycleInputMethodService(),
                     }
                 }
                 undoFrom = ""
-                
-                // composingWord is our own bookkeeping only - characters are
-                // committed as plain text as they're typed (see
-                // onKeyReleased), never marked as an actual composing region
-                // in the field, so there's nothing to finish/re-establish
-                // here regardless of which branch this takes.
+
                 if (composingWord.isNotEmpty()) {
+                    // Shrink the existing composing region in place with a
+                    // single call - no finishComposingText, no delete, no
+                    // re-establishing a new region. That 3-step sequence
+                    // (used previously) is what made backspace unreliable:
+                    // some fields cancel the whole composing span when a
+                    // delete arrives while it's still active, and doing the
+                    // delete and re-commit as separate steps left a window
+                    // for fields that apply edits a frame late to end up
+                    // out of sync. A single setComposingText call is the
+                    // standard, well-supported way every keyboard shrinks a
+                    // word mid-composition.
                     composingWord = composingWord.dropLast(1)
-                }
-                val selection = ic.getSelectedText(0)
-                if (!selection.isNullOrEmpty()) {
-                    ic.commitText("", 1)
+                    ic.setComposingText(composingWord, 1)
                 } else {
-                    deleteCharsBeforeCursor(ic, 1)
+                    val selection = ic.getSelectedText(0)
+                    if (!selection.isNullOrEmpty()) {
+                        ic.commitText("", 1)
+                    } else {
+                        deleteCharsBeforeCursor(ic, 1)
+                    }
                 }
                 updateCapsMode()
             }
@@ -653,6 +664,14 @@ class IMEService : LifecycleInputMethodService(),
 
     private fun deletePrecedingWord() {
         val ic = currentInputConnection ?: return
+        // deleteSurroundingText isn't guaranteed to reach text still marked
+        // as composing, so finish it first - unlike backspace's one-char
+        // case, word-delete isn't going to re-establish composing on what's
+        // left anyway, so there's no risky re-compose step after this.
+        if (composingWord.isNotEmpty()) {
+            ic.finishComposingText()
+            composingWord = ""
+        }
         val selection = ic.getSelectedText(0)
         if (!selection.isNullOrEmpty()) {
             ic.commitText("", 1)
