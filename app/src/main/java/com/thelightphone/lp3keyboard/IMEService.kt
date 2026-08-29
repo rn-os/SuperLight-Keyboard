@@ -524,13 +524,35 @@ class IMEService : LifecycleInputMethodService(),
         val ic = currentInputConnection ?: return
         val text = buildString { appendCodePoint(code) }
         val terminators = ".,!?;:)"
-        if (terminators.contains(text)) {
+        if (text.singleOrNull()?.isDigit() == true) {
+            // Digits aren't spell-checked or autocorrected, so there's no
+            // reason to route them through the composing-region machinery.
+            // That matters especially on the numpad: numeric fields (phone
+            // numbers, dates, PINs) commonly reformat the text and move the
+            // cursor as you type, which drifts our tracked composing
+            // position away from the field's real cursor and makes
+            // backspace delete from the wrong spot. Committing digits
+            // directly avoids tracking a composing position for them at all.
+            ic.finishComposingText()
+            composingWord = ""
+            ic.commitText(text, 1)
+        } else if (terminators.contains(text)) {
             ic.finishComposingText()
             composingWord = ""
             attemptAutocorrect(text)
         } else {
+            // Plain commitText, not setComposingText: composingWord is our
+            // own internal tracking (for spell-check and backspace) and
+            // never needs to be reflected as an actual composing region in
+            // the field. Composing regions are exactly what make backspace
+            // unreliable - some fields don't track them at all, some cancel
+            // the whole span on a single DEL, some drift the cursor away
+            // from where we think it is. Committing each character as it's
+            // typed sidesteps all of that; autocorrect (attemptAutocorrect)
+            // already works purely off plain committed text via
+            // trailingWord(), so it doesn't need the composing region either.
             composingWord += text
-            ic.setComposingText(composingWord, 1)
+            ic.commitText(text, 1)
             requestCheck(composingWord)
         }
         updateCapsMode()
@@ -551,34 +573,19 @@ class IMEService : LifecycleInputMethodService(),
                 }
                 undoFrom = ""
                 
+                // composingWord is our own bookkeeping only - characters are
+                // committed as plain text as they're typed (see
+                // onKeyReleased), never marked as an actual composing region
+                // in the field, so there's nothing to finish/re-establish
+                // here regardless of which branch this takes.
                 if (composingWord.isNotEmpty()) {
                     composingWord = composingWord.dropLast(1)
-                    // deleteSurroundingText is defined to leave composing-region
-                    // text alone, so it can't be relied on to remove the
-                    // character while it's still marked as composing. Committing
-                    // it as plain text first (a no-op on the actual characters,
-                    // just drops the composing/underline styling) makes the
-                    // delete land regardless of how well the target field tracks
-                    // composing spans - some don't, at all.
-                    ic.finishComposingText()
-                    ic.deleteSurroundingText(1, 0)
-                    if (composingWord.isNotEmpty()) {
-                        ic.setComposingText(composingWord, 1)
-                    }
+                }
+                val selection = ic.getSelectedText(0)
+                if (!selection.isNullOrEmpty()) {
+                    ic.commitText("", 1)
                 } else {
-                    val selection = ic.getSelectedText(0)
-                    if (!selection.isNullOrEmpty()) {
-                        ic.commitText("", 1)
-                    } else {
-                        // deleteSurroundingText, not a raw KEYCODE_DEL key event -
-                        // many apps' text fields only implement InputConnection's
-                        // delete methods and never handle a sent DEL key event.
-                        val before = ic.getTextBeforeCursor(2, 0)
-                        val deleteCount = if (before != null && before.length == 2 &&
-                            Character.isSurrogatePair(before[0], before[1])
-                        ) 2 else 1
-                        ic.deleteSurroundingText(deleteCount, 0)
-                    }
+                    deleteCharsBeforeCursor(ic, 1)
                 }
                 updateCapsMode()
             }
@@ -656,9 +663,29 @@ class IMEService : LifecycleInputMethodService(),
             val lastSpace = trimmed.indexOfLast { it.isWhitespace() }
             // Delete from cursor back to start of word (including trailing spaces)
             val charsToDelete = before.length - (if (lastSpace >= 0) lastSpace + 1 else 0)
-            ic.deleteSurroundingText(charsToDelete, 0)
+            deleteCharsBeforeCursor(ic, charsToDelete)
         }
         updateCapsMode()
+    }
+
+    /**
+     * Deletes [count] characters before the cursor via deleteSurroundingText
+     * - the InputConnection method actually meant for this, and what native
+     * EditText and Compose fields both apply reliably.
+     *
+     * This used to also verify the delete landed (by re-reading the text
+     * immediately after) and fall back to a raw KEYCODE_DEL key event if it
+     * looked unchanged, to cover fields that don't implement
+     * deleteSurroundingText at all. Dropped that: several fields apply the
+     * edit on a later frame rather than synchronously, so on fast repeated
+     * presses the immediate re-read would sometimes read stale text, wrongly
+     * conclude the delete failed, and fire the key-event fallback on top of
+     * a delete that actually did land a moment later - a double delete per
+     * keystroke that compounds with every rapid tap.
+     */
+    private fun deleteCharsBeforeCursor(ic: android.view.inputmethod.InputConnection, count: Int) {
+        if (count <= 0) return
+        ic.deleteSurroundingText(count, 0)
     }
 
     override fun onSpecialKeyLongPressed(key: SpecialKey) {
