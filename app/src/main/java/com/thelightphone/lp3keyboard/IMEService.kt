@@ -674,6 +674,13 @@ class IMEService : LifecycleInputMethodService(),
                 }
             }
 
+            SpecialKey.Numbers -> {
+                // Manual escape hatch: not every field that wants numeric
+                // input actually declares a numeric EditorInfo, so long-press
+                // forces the real numpad regardless of auto-detection.
+                viewModel?.setNumericPadActive(true)
+            }
+
             else -> {}
         }
     }

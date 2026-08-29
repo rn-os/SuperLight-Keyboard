@@ -1,8 +1,7 @@
 package com.thelightphone.lp3Keyboard.ui.layout
 
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -41,15 +40,15 @@ object EnShared {
     }
 
     /**
-     * A dedicated 3x4 numeric keypad, shown automatically by the IME when the
-     * focused field's EditorInfo declares a numeric input class - never
-     * reached through the normal Letters/Numbers/Symbols toggle chain, so it
-     * has no ABC/space/return keys of its own (dismiss is still available via
-     * the existing overlay close chevron, same as every other root layout).
+     * A dedicated 3x4 numeric keypad. Shown automatically by the IME when the
+     * focused field's EditorInfo declares a numeric input class, or manually
+     * by long-pressing the "123" key - not every field that wants numbers
+     * declares itself that way, so this is also a deliberate escape hatch.
+     * Not a root layout (like Numbers/Symbols/Emoji): the dismiss chevron
+     * returns to the alphabet on the first press rather than hiding the
+     * keyboard, and it also keeps its own "ABC" key for the same exit.
      */
     object NumberPadLayout : Layout {
-        override val isRootLayout: Boolean get() = true
-
         @Composable
         override fun ColumnScope.Render(
             options: KeyboardOptions,
@@ -74,14 +73,24 @@ object EnShared {
                 Key('9'.code, callback, swipeConfig, options.enableKeyAnimation, width = keyWidth)
             }
             DefaultRow(height = rowHeight) {
-                Spacer(Modifier.width(keyWidth))
+                MultiLabelKey(
+                    "ABC",
+                    SpecialKey.Letters,
+                    callback,
+                    options.enableKeyAnimation,
+                    width = keyWidth
+                )
                 Key('0'.code, callback, swipeConfig, options.enableKeyAnimation, width = keyWidth)
                 IconKey(
                     R.drawable.back_lp3,
                     SpecialKey.Backspace,
                     callback,
                     options.enableKeyAnimation,
-                    width = keyWidth
+                    width = keyWidth,
+                    // The icon's own intrinsic size (19x32dp) reads as
+                    // oversized next to the 25sp digit glyphs here - scale
+                    // it down to match the weight of the digits above it.
+                    iconModifier = Modifier.size(13.dp, 22.dp)
                 )
             }
         }

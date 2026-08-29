@@ -332,7 +332,8 @@ fun RowScope.IconKey(
     callback: Lp3KeyboardCallback,
     enableKeyAnimation: Boolean,
     modifier: Modifier = Modifier,
-    width: Dp = STANDARD_KEY_WIDTH_DP.dp
+    width: Dp = STANDARD_KEY_WIDTH_DP.dp,
+    iconModifier: Modifier = Modifier
 ) {
     var pressed by remember { mutableStateOf(false) }
     val onPressed = remember(key, callback) { { callback.onSpecialKeyPressed(key) } }
@@ -356,7 +357,7 @@ fun RowScope.IconKey(
             painterResource(drawable),
             contentDescription = "TODO",
             tint = LocalKeyboardColors.current.foreground,
-            modifier = Modifier.then(
+            modifier = iconModifier.then(
                 if (enableKeyAnimation) {
                     Modifier.graphicsLayer {
                         val isPressed = pressed
@@ -513,7 +514,8 @@ fun RowScope.MultiLabelKey(
     labelText: String,
     key: SpecialKey,
     callback: Lp3KeyboardCallback,
-    enableKeyAnimation: Boolean
+    enableKeyAnimation: Boolean,
+    width: Dp = ICON_KEY_WIDTH_DP.dp
 ) {
     var pressed by remember { mutableStateOf(false) }
     val onPressed = remember(key, callback) { { callback.onSpecialKeyPressed(key) } }
@@ -521,7 +523,7 @@ fun RowScope.MultiLabelKey(
     val onLongPressed = remember(key, callback) { { callback.onSpecialKeyLongPressed(key) } }
     Box(
         modifier = Modifier
-            .width(ICON_KEY_WIDTH_DP.dp)
+            .width(width)
             .fillMaxHeight()
             .keyInput(
                 inputKey = labelText,
