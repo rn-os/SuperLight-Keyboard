@@ -7,8 +7,29 @@ A private, Light Phone 3–style Android system keyboard combining the LPIII Key
 - **Offline voice-to-text:** fully integrated with the Vosk engine; speech is processed on-device.
 - **Autocorrect:** intelligent word correction, with revert-on-backspace support.
 - **Auto-capitalization and auto-period:** modern typing conveniences, enabled by default.
+- **Numbers, symbols, and emoji layouts:** reachable from the main keyboard's toggle keys.
+- **Dedicated numeric keypad:** shown automatically for number/phone/date fields, or forced with a long-press on the "123" key for fields that don't declare themselves numeric.
+- **Copy & paste menu:** a clipboard history overlay, opened with a long-press on the space bar.
 - **Redesigned settings:** a custom, minimalist interface aligned with the Light Phone 3 aesthetic.
 - **Suggestions UI:** a minimalist overlay for correcting misspelled words.
+
+## Screenshots
+
+<table>
+<tr>
+<td><img src="docs/screenshots/keyboard-letters.png" width="260" alt="Letters layout"><br><sub>Letters</sub></td>
+<td><img src="docs/screenshots/keyboard-letters-shift.png" width="260" alt="Shifted letters layout"><br><sub>Shift</sub></td>
+<td><img src="docs/screenshots/keyboard-numbers.png" width="260" alt="Numbers layout"><br><sub>Numbers</sub></td>
+</tr>
+<tr>
+<td><img src="docs/screenshots/keyboard-symbols.png" width="260" alt="Symbols layout"><br><sub>Symbols</sub></td>
+<td><img src="docs/screenshots/keyboard-emoji.png" width="260" alt="Emoji layout"><br><sub>Emoji</sub></td>
+<td><img src="docs/screenshots/keyboard-numpad.png" width="260" alt="Numeric keypad"><br><sub>Numeric keypad</sub></td>
+</tr>
+<tr>
+<td><img src="docs/screenshots/keyboard-clipboard.png" width="260" alt="Clipboard menu"><br><sub>Copy &amp; paste menu</sub></td>
+</tr>
+</table>
 
 ## Install and set up
 
