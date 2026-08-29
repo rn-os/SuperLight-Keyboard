@@ -17,7 +17,7 @@ android {
         applicationId = "com.thelightphone.lp3keyboard"
         minSdk = 33
         targetSdk = 36
-        versionCode = 4
+        versionCode = 6
         versionName = providers.gradleProperty("projectVersion").get()
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

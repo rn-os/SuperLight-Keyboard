@@ -394,8 +394,10 @@ class IMEService : LifecycleInputMethodService(),
     ) {
         super.onUpdateSelection(oldSelStart, oldSelEnd, newSelStart, newSelEnd, candidatesStart, candidatesEnd)
         updateCapsMode()
-        
-        // If the cursor moved away from our composing region, reset it
+
+        // If the field isn't reporting our composing region as active
+        // anymore (cursor moved away, or the field never tracked it),
+        // stop treating further backspaces as continuing this word.
         if (composingWord.isNotEmpty() && candidatesStart == -1) {
             composingWord = ""
         }
@@ -524,11 +526,34 @@ class IMEService : LifecycleInputMethodService(),
         val ic = currentInputConnection ?: return
         val text = buildString { appendCodePoint(code) }
         val terminators = ".,!?;:)"
-        if (terminators.contains(text)) {
+        if (text.singleOrNull()?.isDigit() == true) {
+            // Digits aren't spell-checked or autocorrected, so there's no
+            // reason to route them through the composing-region machinery.
+            // That matters especially on the numpad: numeric fields (phone
+            // numbers, dates, PINs) commonly reformat the text and move the
+            // cursor as you type, which drifts our tracked composing
+            // position away from the field's real cursor and makes
+            // backspace delete from the wrong spot. Committing digits
+            // directly avoids tracking a composing position for them at all.
+            ic.finishComposingText()
+            composingWord = ""
+            ic.commitText(text, 1)
+        } else if (terminators.contains(text)) {
             ic.finishComposingText()
             composingWord = ""
             attemptAutocorrect(text)
         } else {
+            // A real composing region: it's the one thing virtually every
+            // text field renders with an underline (commitText with a
+            // styling span is best-effort and most editors ignore it, as
+            // verified on-device). The bug composing regions caused wasn't
+            // the region itself - it was backspace finishing the region and
+            // then trying to delete + re-establish a new one, a 3-step
+            // sequence some fields mishandle (canceling the whole span on
+            // the delete, or misapplying the delete). Backspace now just
+            // shrinks this same region in place with one setComposingText
+            // call (see onSpecialKeyReleased), never touching
+            // finishComposingText or a raw delete mid-word.
             composingWord += text
             ic.setComposingText(composingWord, 1)
             requestCheck(composingWord)
@@ -550,34 +575,27 @@ class IMEService : LifecycleInputMethodService(),
                     }
                 }
                 undoFrom = ""
-                
+
                 if (composingWord.isNotEmpty()) {
+                    // Shrink the existing composing region in place with a
+                    // single call - no finishComposingText, no delete, no
+                    // re-establishing a new region. That 3-step sequence
+                    // (used previously) is what made backspace unreliable:
+                    // some fields cancel the whole composing span when a
+                    // delete arrives while it's still active, and doing the
+                    // delete and re-commit as separate steps left a window
+                    // for fields that apply edits a frame late to end up
+                    // out of sync. A single setComposingText call is the
+                    // standard, well-supported way every keyboard shrinks a
+                    // word mid-composition.
                     composingWord = composingWord.dropLast(1)
-                    // deleteSurroundingText is defined to leave composing-region
-                    // text alone, so it can't be relied on to remove the
-                    // character while it's still marked as composing. Committing
-                    // it as plain text first (a no-op on the actual characters,
-                    // just drops the composing/underline styling) makes the
-                    // delete land regardless of how well the target field tracks
-                    // composing spans - some don't, at all.
-                    ic.finishComposingText()
-                    ic.deleteSurroundingText(1, 0)
-                    if (composingWord.isNotEmpty()) {
-                        ic.setComposingText(composingWord, 1)
-                    }
+                    ic.setComposingText(composingWord, 1)
                 } else {
                     val selection = ic.getSelectedText(0)
                     if (!selection.isNullOrEmpty()) {
                         ic.commitText("", 1)
                     } else {
-                        // deleteSurroundingText, not a raw KEYCODE_DEL key event -
-                        // many apps' text fields only implement InputConnection's
-                        // delete methods and never handle a sent DEL key event.
-                        val before = ic.getTextBeforeCursor(2, 0)
-                        val deleteCount = if (before != null && before.length == 2 &&
-                            Character.isSurrogatePair(before[0], before[1])
-                        ) 2 else 1
-                        ic.deleteSurroundingText(deleteCount, 0)
+                        deleteCharsBeforeCursor(ic, 1)
                     }
                 }
                 updateCapsMode()
@@ -646,6 +664,14 @@ class IMEService : LifecycleInputMethodService(),
 
     private fun deletePrecedingWord() {
         val ic = currentInputConnection ?: return
+        // deleteSurroundingText isn't guaranteed to reach text still marked
+        // as composing, so finish it first - unlike backspace's one-char
+        // case, word-delete isn't going to re-establish composing on what's
+        // left anyway, so there's no risky re-compose step after this.
+        if (composingWord.isNotEmpty()) {
+            ic.finishComposingText()
+            composingWord = ""
+        }
         val selection = ic.getSelectedText(0)
         if (!selection.isNullOrEmpty()) {
             ic.commitText("", 1)
@@ -656,9 +682,29 @@ class IMEService : LifecycleInputMethodService(),
             val lastSpace = trimmed.indexOfLast { it.isWhitespace() }
             // Delete from cursor back to start of word (including trailing spaces)
             val charsToDelete = before.length - (if (lastSpace >= 0) lastSpace + 1 else 0)
-            ic.deleteSurroundingText(charsToDelete, 0)
+            deleteCharsBeforeCursor(ic, charsToDelete)
         }
         updateCapsMode()
+    }
+
+    /**
+     * Deletes [count] characters before the cursor via deleteSurroundingText
+     * - the InputConnection method actually meant for this, and what native
+     * EditText and Compose fields both apply reliably.
+     *
+     * This used to also verify the delete landed (by re-reading the text
+     * immediately after) and fall back to a raw KEYCODE_DEL key event if it
+     * looked unchanged, to cover fields that don't implement
+     * deleteSurroundingText at all. Dropped that: several fields apply the
+     * edit on a later frame rather than synchronously, so on fast repeated
+     * presses the immediate re-read would sometimes read stale text, wrongly
+     * conclude the delete failed, and fire the key-event fallback on top of
+     * a delete that actually did land a moment later - a double delete per
+     * keystroke that compounds with every rapid tap.
+     */
+    private fun deleteCharsBeforeCursor(ic: android.view.inputmethod.InputConnection, count: Int) {
+        if (count <= 0) return
+        ic.deleteSurroundingText(count, 0)
     }
 
     override fun onSpecialKeyLongPressed(key: SpecialKey) {
