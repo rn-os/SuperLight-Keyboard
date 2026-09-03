@@ -3,6 +3,8 @@ package com.thelightphone.lp3Keyboard.ui.layout
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.thelightphone.lp3Keyboard.ui.DefaultRow
@@ -12,6 +14,7 @@ import com.thelightphone.lp3Keyboard.ui.IconKey
 import com.thelightphone.lp3Keyboard.ui.Key
 import com.thelightphone.lp3Keyboard.ui.KeyboardOptions
 import com.thelightphone.lp3Keyboard.ui.LP3_KEYBOARD_HEIGHT_DP
+import com.thelightphone.lp3Keyboard.ui.LocalKeyEdgeExtend
 import com.thelightphone.lp3Keyboard.ui.Lp3KeyboardCallback
 import com.thelightphone.lp3Keyboard.ui.MEDIUM_KEY_WIDTH_DP
 import com.thelightphone.lp3Keyboard.ui.MultiLabelKey
@@ -58,40 +61,56 @@ object EnShared {
             val keyWidth = 116.dp
 
             DefaultRow(height = rowHeight) {
-                Key('1'.code, callback, swipeConfig, options.enableKeyAnimation, width = keyWidth)
+                CompositionLocalProvider(LocalKeyEdgeExtend provides Alignment.Start) {
+                    Key('1'.code, callback, swipeConfig, options.enableKeyAnimation, width = keyWidth)
+                }
                 Key('2'.code, callback, swipeConfig, options.enableKeyAnimation, width = keyWidth)
-                Key('3'.code, callback, swipeConfig, options.enableKeyAnimation, width = keyWidth)
+                CompositionLocalProvider(LocalKeyEdgeExtend provides Alignment.End) {
+                    Key('3'.code, callback, swipeConfig, options.enableKeyAnimation, width = keyWidth)
+                }
             }
             DefaultRow(height = rowHeight) {
-                Key('4'.code, callback, swipeConfig, options.enableKeyAnimation, width = keyWidth)
+                CompositionLocalProvider(LocalKeyEdgeExtend provides Alignment.Start) {
+                    Key('4'.code, callback, swipeConfig, options.enableKeyAnimation, width = keyWidth)
+                }
                 Key('5'.code, callback, swipeConfig, options.enableKeyAnimation, width = keyWidth)
-                Key('6'.code, callback, swipeConfig, options.enableKeyAnimation, width = keyWidth)
+                CompositionLocalProvider(LocalKeyEdgeExtend provides Alignment.End) {
+                    Key('6'.code, callback, swipeConfig, options.enableKeyAnimation, width = keyWidth)
+                }
             }
             DefaultRow(height = rowHeight) {
-                Key('7'.code, callback, swipeConfig, options.enableKeyAnimation, width = keyWidth)
+                CompositionLocalProvider(LocalKeyEdgeExtend provides Alignment.Start) {
+                    Key('7'.code, callback, swipeConfig, options.enableKeyAnimation, width = keyWidth)
+                }
                 Key('8'.code, callback, swipeConfig, options.enableKeyAnimation, width = keyWidth)
-                Key('9'.code, callback, swipeConfig, options.enableKeyAnimation, width = keyWidth)
+                CompositionLocalProvider(LocalKeyEdgeExtend provides Alignment.End) {
+                    Key('9'.code, callback, swipeConfig, options.enableKeyAnimation, width = keyWidth)
+                }
             }
             DefaultRow(height = rowHeight) {
-                MultiLabelKey(
-                    "ABC",
-                    SpecialKey.Letters,
-                    callback,
-                    options.enableKeyAnimation,
-                    width = keyWidth
-                )
+                CompositionLocalProvider(LocalKeyEdgeExtend provides Alignment.Start) {
+                    MultiLabelKey(
+                        "ABC",
+                        SpecialKey.Letters,
+                        callback,
+                        options.enableKeyAnimation,
+                        width = keyWidth
+                    )
+                }
                 Key('0'.code, callback, swipeConfig, options.enableKeyAnimation, width = keyWidth)
-                IconKey(
-                    R.drawable.back_lp3,
-                    SpecialKey.Backspace,
-                    callback,
-                    options.enableKeyAnimation,
-                    width = keyWidth,
-                    // The icon's own intrinsic size (19x32dp) reads as
-                    // oversized next to the 25sp digit glyphs here - scale
-                    // it down to match the weight of the digits above it.
-                    iconModifier = Modifier.size(13.dp, 22.dp)
-                )
+                CompositionLocalProvider(LocalKeyEdgeExtend provides Alignment.End) {
+                    IconKey(
+                        R.drawable.back_lp3,
+                        SpecialKey.Backspace,
+                        callback,
+                        options.enableKeyAnimation,
+                        width = keyWidth,
+                        // The icon's own intrinsic size (19x32dp) reads as
+                        // oversized next to the 25sp digit glyphs here - scale
+                        // it down to match the weight of the digits above it.
+                        iconModifier = Modifier.size(13.dp, 22.dp)
+                    )
+                }
             }
         }
     }
