@@ -45,6 +45,10 @@ The underline you see under a word while it's still being typed (visible in the 
 
 For the full debugging trail behind these fixes - what was tried, why each attempt failed, and a decision guide for the next backspace bug - see [`docs/ime-backspace-debugging.md`](docs/ime-backspace-debugging.md).
 
+## Recent fixes (v1.2.4)
+
+- **Autocorrect's revert-on-backspace wasn't reverting.** Pressing backspace right after autocorrect changed a word was supposed to undo the correction and give you back exactly what you typed - useful when the "fix" wasn't actually what you meant. The check that detects this (comparing the text before the cursor) was missing the trailing space/punctuation autocorrect also commits, so it could never match and the revert silently never fired. Fixed; one backspace right after a correction now restores your original spelling.
+
 ## Install and set up
 
 Download the latest APK from [Releases](../../releases) and open it on your Android device. Then open **Light Keyboard** and:

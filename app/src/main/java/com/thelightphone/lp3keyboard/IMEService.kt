@@ -255,7 +255,10 @@ class IMEService : LifecycleInputMethodService(),
             val corrected = applyCase(word, fix)
             ic.deleteSurroundingText(expected.length, 0)
             ic.commitText(corrected + terminator, 1)
-            undoFrom = corrected
+            // Compared against on backspace below - has to include the
+            // terminator since that's what's actually sitting before the
+            // cursor now, not just the corrected word by itself.
+            undoFrom = corrected + terminator
             undoTo = word
         }
         lateWord = ""
@@ -331,7 +334,10 @@ class IMEService : LifecycleInputMethodService(),
             val corrected = applyCase(word, fix)
             ic.deleteSurroundingText(word.length, 0)
             ic.commitText(corrected + terminator, 1)
-            undoFrom = corrected
+            // See the comment on this same assignment in applyLateFix - has
+            // to include the terminator to match what's actually before the
+            // cursor by the time backspace checks it.
+            undoFrom = corrected + terminator
             undoTo = word
         } else {
             lateWord = word
