@@ -37,6 +37,14 @@ interface Lp3KeyboardViewModel<SwipeResultType> : Lp3KeyboardCallback, Lp3Keyboa
      * keypad rather than the normal alphabet layout.
      */
     fun setNumericPadActive(active: Boolean)
+
+    /**
+     * Called by the IME (from its own settings-backed preference) to toggle
+     * whether the first/last key in each row extends its touch target to
+     * the screen edge, vs. the original LightOS spacing where every key's
+     * hitbox stops at its own visible width. See LocalKeyEdgeExtend.
+     */
+    fun setExtendEdgeHitboxes(enabled: Boolean)
 }
 
 val defaultEmojis = listOf(

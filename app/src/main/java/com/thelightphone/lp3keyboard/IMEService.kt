@@ -108,8 +108,13 @@ class IMEService : LifecycleInputMethodService(),
                 LayoutPreferences.KEY_AUTOCORRECT_ENABLED -> initSpell()
                 LayoutPreferences.KEY_AUTO_CAPITALIZE_ENABLED -> updateCapsMode()
                 LayoutPreferences.KEY_CLIPBOARD_ENABLED -> onClipboardEnabledChanged()
+                LayoutPreferences.KEY_LIGHTOS_HITBOXES_ENABLED -> applyHitboxPreference()
             }
         }
+
+    private fun applyHitboxPreference() {
+        viewModel?.setExtendEdgeHitboxes(!LayoutPreferences.isLightOsHitboxesEnabled(this))
+    }
 
     private fun refreshLayoutIfNeeded() {
         if (LayoutPreferences.getActiveLayout(this) != renderedLayout) {
@@ -153,6 +158,7 @@ class IMEService : LifecycleInputMethodService(),
         val vm = buildViewModel(layout)
         renderedLayout = layout
         viewModel = vm
+        applyHitboxPreference()
 
         val view = Lp3KeyboardView(
             context = this,

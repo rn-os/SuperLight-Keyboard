@@ -17,7 +17,7 @@ class EnQwertyLp3KeyboardViewModel<SwipeResult>(
             displayCloseButton = true
         )
     },
-    keyboardOptionsFlow: StateFlow<KeyboardOptions> = MutableStateFlow(
+    keyboardOptionsFlow: MutableStateFlow<KeyboardOptions> = MutableStateFlow(
         KeyboardOptions(
             defaultEmojis,
             displayReturn = true,
@@ -31,7 +31,7 @@ class EnQwertyLp3KeyboardViewModel<SwipeResult>(
     swipeCallback = swipeCallback,
     haptic = haptic,
     optionsForLayout = optionsForLayout,
-    keyboardOptionsFlow = keyboardOptionsFlow,
+    _keyboardOptionsFlow = keyboardOptionsFlow,
     initialLayout = EnQwerty.LowerCaseLayout,
     lowerCaseLayout = EnQwerty.LowerCaseLayout,
     upperCaseLayout = EnQwerty.UpperCaseLayout,

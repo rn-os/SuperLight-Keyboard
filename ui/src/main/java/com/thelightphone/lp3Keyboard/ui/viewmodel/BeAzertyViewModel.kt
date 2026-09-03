@@ -17,7 +17,7 @@ class BeAzertyLp3KeyboardViewModel<SwipeResult>(
             displayCloseButton = true
         )
     },
-    keyboardOptionsFlow: StateFlow<KeyboardOptions> = MutableStateFlow(
+    keyboardOptionsFlow: MutableStateFlow<KeyboardOptions> = MutableStateFlow(
         KeyboardOptions(
             defaultEmojis,
             displayReturn = true,
@@ -31,7 +31,7 @@ class BeAzertyLp3KeyboardViewModel<SwipeResult>(
     swipeCallback = swipeCallback,
     haptic = haptic,
     optionsForLayout = optionsForLayout,
-    keyboardOptionsFlow = keyboardOptionsFlow,
+    _keyboardOptionsFlow = keyboardOptionsFlow,
     initialLayout = BeAzerty.LowerCaseLayout,
     lowerCaseLayout = BeAzerty.LowerCaseLayout,
     upperCaseLayout = BeAzerty.UpperCaseLayout,
