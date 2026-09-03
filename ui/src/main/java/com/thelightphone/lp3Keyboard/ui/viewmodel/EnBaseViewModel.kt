@@ -99,7 +99,19 @@ abstract class EnBaseViewModel<SwipeResult>(
             if (layoutFlow.value !== EnShared.NumberPadLayout) {
                 setLayout(EnShared.NumberPadLayout)
             }
-        } else if (layoutFlow.value === EnShared.NumberPadLayout) {
+        } else if (layoutFlow.value !== lowerCaseLayout &&
+            layoutFlow.value !== upperCaseLayout &&
+            layoutFlow.value !== capsLockedLayout
+        ) {
+            // Called once per genuinely new field (see IMEService's
+            // onStartInputView), so this is "you've moved to a new,
+            // non-numeric field" - reset to the default alphabet layout
+            // regardless of what was showing before. Common keyboards
+            // don't carry a symbols/emoji/numpad override from one field
+            // to the next; only NumberPadLayout was handled here
+            // previously, which left Symbols/Emoji/the "123" toggle row/an
+            // extended-char popup stuck on screen when reopening an
+            // unrelated field elsewhere.
             showAlphabetLayout()
         }
     }

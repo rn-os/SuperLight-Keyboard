@@ -49,6 +49,11 @@ For the full debugging trail behind these fixes - what was tried, why each attem
 
 - **Autocorrect's revert-on-backspace wasn't reverting.** Pressing backspace right after autocorrect changed a word was supposed to undo the correction and give you back exactly what you typed - useful when the "fix" wasn't actually what you meant. The check that detects this (comparing the text before the cursor) was missing the trailing space/punctuation autocorrect also commits, so it could never match and the revert silently never fired. Fixed; one backspace right after a correction now restores your original spelling.
 
+## Recent fixes (v1.2.5)
+
+- **The manually-forced numeric keypad (long-press "123") would snap back to letters after typing a single digit**, on any field that doesn't declare itself numeric. Some fields restart their input connection on every keystroke; the keyboard was re-checking "is this field numeric?" on every such restart and reverting because the answer is always "no" for a non-numeric field - discarding the manual override it had just been asked to keep. The check now only runs when a genuinely new field is focused, not on same-field restarts.
+- **The keyboard could get stuck on symbols, emoji, or the numpad after switching apps.** Only the numpad had logic to reset back to letters when moving to a new, non-numeric field; the "123" toggle row, symbols, and emoji layouts had no such reset, so whichever one you left open could still be showing the next time you opened a completely unrelated app - not how keyboards are expected to behave elsewhere on Android. Moving to a new field now always resets to the default alphabet layout unless that field is itself numeric.
+
 ## Install and set up
 
 Download the latest APK from [Releases](../../releases) and open it on your Android device. Then open **Light Keyboard** and:

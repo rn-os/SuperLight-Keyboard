@@ -188,7 +188,17 @@ class IMEService : LifecycleInputMethodService(),
         pending.clear()
         viewModel?.setSuggestions(emptyList())
         viewModel?.hideClipboard()
-        viewModel?.setNumericPadActive(isNumericInputField(info))
+        // Only re-derive the layout for a genuinely new field (restarting
+        // == false). Some fields (e.g. a Compose TextField with
+        // capitalization options set) call InputMethodManager.restartInput
+        // on themselves mid-edit, which reports back here as the same
+        // field restarting - re-running the numeric check on every such
+        // restart would silently snap a manually-forced numpad (long-press
+        // "123" on a non-numeric field) back to letters after a single
+        // keystroke, discarding the user's own override.
+        if (!restarting) {
+            viewModel?.setNumericPadActive(isNumericInputField(info))
+        }
     }
 
     private fun isNumericInputField(info: EditorInfo?): Boolean {
