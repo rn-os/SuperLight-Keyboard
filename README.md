@@ -58,6 +58,10 @@ For the full debugging trail behind these fixes - what was tried, why each attem
 
 - **The leftmost and rightmost key in each row were harder to hit accurately than the keys in between.** Every row centers its keys, but the keys' combined width doesn't quite reach the screen edges, leaving an empty, non-clickable margin on each side that isn't part of any key's touch target - a tap that lands short (very common right at the bezel) missed entirely, where the same kind of miss on an interior key would still land on a neighbor. The first and last key in every row now catch taps all the way out to the screen edge, matching how Gboard and iOS extend their own edge keys - the keys' visible position and size are unchanged, only the touch target grew.
 
+## Recent fixes (v1.2.7)
+
+- **Added a "LightOS-style Key Spacing" setting (Typing settings, off by default).** The v1.2.6 fix that extended the first/last key in each row out to the screen edge changed the keyboard's touch targets slightly from the original Light Phone 3 layout. Most people won't notice, but if you'd rather have the exact original LightOS spacing back, this toggle restores it - each key's hitbox reverts to stopping at its own visible width, with no other behavior changes.
+
 ## Install and set up
 
 Download the latest APK from [Releases](../../releases) and open it on your Android device. Then open **Light Keyboard** and:

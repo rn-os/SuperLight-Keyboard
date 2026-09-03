@@ -347,6 +347,7 @@ fun TypingSettingsSection() {
     var autoCapitalizeEnabled by remember { mutableStateOf(LayoutPreferences.isAutoCapitalizeEnabled(context)) }
     var autoPeriodEnabled by remember { mutableStateOf(LayoutPreferences.isAutoPeriodEnabled(context)) }
     var clipboardEnabled by remember { mutableStateOf(LayoutPreferences.isClipboardEnabled(context)) }
+    var lightOsHitboxesEnabled by remember { mutableStateOf(LayoutPreferences.isLightOsHitboxesEnabled(context)) }
 
     Column {
         LightToggleRow(
@@ -388,6 +389,17 @@ fun TypingSettingsSection() {
             onCheckedChange = {
                 clipboardEnabled = it
                 LayoutPreferences.setClipboardEnabled(context, it)
+            }
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        LightToggleRow(
+            label = "LightOS-style Key Spacing",
+            checked = lightOsHitboxesEnabled,
+            onCheckedChange = {
+                lightOsHitboxesEnabled = it
+                LayoutPreferences.setLightOsHitboxesEnabled(context, it)
             }
         )
     }

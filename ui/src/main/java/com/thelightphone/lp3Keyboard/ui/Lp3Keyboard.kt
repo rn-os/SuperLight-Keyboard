@@ -130,6 +130,15 @@ interface Lp3KeyboardSwipeCallback<ResultType> {
  */
 val LocalKeyEdgeExtend = compositionLocalOf<Alignment.Horizontal?> { null }
 
+/**
+ * Whether edge keys actually honor [LocalKeyEdgeExtend]. Row builders always
+ * mark their first/last key regardless; this is the single switch (driven by
+ * [KeyboardOptions.extendEdgeHitboxes]) that turns that off everywhere at
+ * once for the "original LightOS spacing" setting, without every row
+ * builder needing to know about the setting itself.
+ */
+val LocalKeyEdgeExtensionEnabled = compositionLocalOf { true }
+
 const val LP3_KEYBOARD_HEIGHT_DP = 164
 const val STANDARD_KEY_WIDTH_DP = 35
 const val ICON_KEY_WIDTH_DP = STANDARD_KEY_WIDTH_DP + 14
@@ -278,7 +287,10 @@ fun Lp3Keyboard(
             )
     ) {
         Column(Modifier.fillMaxSize().padding(top = 4.dp).align(Alignment.Center)) {
-            CompositionLocalProvider(LocalAkkuratFamily provides akkurat) {
+            CompositionLocalProvider(
+                LocalAkkuratFamily provides akkurat,
+                LocalKeyEdgeExtensionEnabled provides options.extendEdgeHitboxes
+            ) {
                 with(layout) { Render(options, callback) }
             }
         }
@@ -359,7 +371,7 @@ fun RowScope.IconKey(
     val onPressed = remember(key, callback) { { callback.onSpecialKeyPressed(key) } }
     val onReleased = remember(key, callback) { { callback.onSpecialKeyReleased(key) } }
     val onLongPressed = remember(key, callback) { { callback.onSpecialKeyLongPressed(key) } }
-    val edgeExtend = LocalKeyEdgeExtend.current
+    val edgeExtend = LocalKeyEdgeExtend.current.takeIf { LocalKeyEdgeExtensionEnabled.current }
     Box(
         modifier = Modifier
             .then(if (edgeExtend != null) Modifier.weight(1f) else Modifier.width(width))
@@ -500,7 +512,7 @@ fun RowScope.Key(
             ?: { callback.onKeyCancelled(code) }
     }
 
-    val edgeExtend = LocalKeyEdgeExtend.current
+    val edgeExtend = LocalKeyEdgeExtend.current.takeIf { LocalKeyEdgeExtensionEnabled.current }
     Box(
         modifier = Modifier
             .then(if (edgeExtend != null) Modifier.weight(1f) else Modifier.width(width))
@@ -565,7 +577,7 @@ fun RowScope.MultiLabelKey(
     val onPressed = remember(key, callback) { { callback.onSpecialKeyPressed(key) } }
     val onReleased = remember(key, callback) { { callback.onSpecialKeyReleased(key) } }
     val onLongPressed = remember(key, callback) { { callback.onSpecialKeyLongPressed(key) } }
-    val edgeExtend = LocalKeyEdgeExtend.current
+    val edgeExtend = LocalKeyEdgeExtend.current.takeIf { LocalKeyEdgeExtensionEnabled.current }
     Box(
         modifier = Modifier
             .then(if (edgeExtend != null) Modifier.weight(1f) else Modifier.width(width))
@@ -622,7 +634,12 @@ data class KeyboardOptions(
     val displayReturn: Boolean,
     val displayVoice: Boolean,
     val enableKeyAnimation: Boolean,
-    val swipeEnabled: Boolean
+    val swipeEnabled: Boolean,
+    // Off reproduces the original LightOS spacing exactly (each key's touch
+    // target stops at its own visible width); on, the default, extends the
+    // first/last key in each row out to the actual screen edge. See
+    // LocalKeyEdgeExtend.
+    val extendEdgeHitboxes: Boolean = true
 )
 
 data class LayoutOptions(

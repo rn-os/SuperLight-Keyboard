@@ -31,7 +31,7 @@ abstract class EnBaseViewModel<SwipeResult>(
             displayCloseButton = true
         )
     },
-    override val keyboardOptionsFlow: StateFlow<KeyboardOptions> = MutableStateFlow(
+    private val _keyboardOptionsFlow: MutableStateFlow<KeyboardOptions> = MutableStateFlow(
         KeyboardOptions(
             defaultEmojis,
             displayReturn = true,
@@ -45,6 +45,12 @@ abstract class EnBaseViewModel<SwipeResult>(
     val upperCaseLayout: Layout,
     val capsLockedLayout: Layout,
 ) : ViewModel(), Lp3KeyboardViewModel<SwipeResult> {
+
+    override val keyboardOptionsFlow: StateFlow<KeyboardOptions> = _keyboardOptionsFlow
+
+    override fun setExtendEdgeHitboxes(enabled: Boolean) {
+        _keyboardOptionsFlow.value = _keyboardOptionsFlow.value.copy(extendEdgeHitboxes = enabled)
+    }
 
     var previousLayout: Layout? = null
         private set
