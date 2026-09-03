@@ -54,6 +54,10 @@ For the full debugging trail behind these fixes - what was tried, why each attem
 - **The manually-forced numeric keypad (long-press "123") would snap back to letters after typing a single digit**, on any field that doesn't declare itself numeric. Some fields restart their input connection on every keystroke; the keyboard was re-checking "is this field numeric?" on every such restart and reverting because the answer is always "no" for a non-numeric field - discarding the manual override it had just been asked to keep. The check now only runs when a genuinely new field is focused, not on same-field restarts.
 - **The keyboard could get stuck on symbols, emoji, or the numpad after switching apps.** Only the numpad had logic to reset back to letters when moving to a new, non-numeric field; the "123" toggle row, symbols, and emoji layouts had no such reset, so whichever one you left open could still be showing the next time you opened a completely unrelated app - not how keyboards are expected to behave elsewhere on Android. Moving to a new field now always resets to the default alphabet layout unless that field is itself numeric.
 
+## Recent fixes (v1.2.6)
+
+- **The leftmost and rightmost key in each row were harder to hit accurately than the keys in between.** Every row centers its keys, but the keys' combined width doesn't quite reach the screen edges, leaving an empty, non-clickable margin on each side that isn't part of any key's touch target - a tap that lands short (very common right at the bezel) missed entirely, where the same kind of miss on an interior key would still land on a neighbor. The first and last key in every row now catch taps all the way out to the screen edge, matching how Gboard and iOS extend their own edge keys - the keys' visible position and size are unchanged, only the touch target grew.
+
 ## Install and set up
 
 Download the latest APK from [Releases](../../releases) and open it on your Android device. Then open **Light Keyboard** and:

@@ -28,6 +28,7 @@ import androidx.compose.material.Icon
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -109,6 +110,25 @@ interface Lp3KeyboardSwipeCallback<ResultType> {
         emptyList()
     fun getWordForResult(swipeResult: ResultType): CharSequence? = null
 }
+
+/**
+ * Non-null while composing the first or last key of a row: extends that
+ * key's touch target out to the row's own edge instead of stopping at its
+ * visual width, since [DefaultRow] and friends center their content and
+ * otherwise leave a dead, non-clickable margin between the outermost key
+ * and the actual screen edge on any row that doesn't exactly fill the
+ * available width - real touchscreens make edge taps land short of center
+ * more often than not, and interior keys have neighbours to absorb that
+ * with no gap, while edge keys had nothing there to catch it. [Alignment.Start]
+ * means "grow toward the row's start edge" (this is the first key), keeping
+ * the key's own visible content pinned to its end (so it doesn't visually
+ * shift); [Alignment.End] is the mirror image for the last key. A
+ * CompositionLocal (rather than a parameter on Key/IconKey/MultiLabelKey)
+ * so row builders can apply it around a `leftButton()` slot - a
+ * locale-supplied composable neither row builder can see inside - without
+ * every one of them threading a new parameter through.
+ */
+val LocalKeyEdgeExtend = compositionLocalOf<Alignment.Horizontal?> { null }
 
 const val LP3_KEYBOARD_HEIGHT_DP = 164
 const val STANDARD_KEY_WIDTH_DP = 35
@@ -339,9 +359,10 @@ fun RowScope.IconKey(
     val onPressed = remember(key, callback) { { callback.onSpecialKeyPressed(key) } }
     val onReleased = remember(key, callback) { { callback.onSpecialKeyReleased(key) } }
     val onLongPressed = remember(key, callback) { { callback.onSpecialKeyLongPressed(key) } }
+    val edgeExtend = LocalKeyEdgeExtend.current
     Box(
         modifier = Modifier
-            .width(width)
+            .then(if (edgeExtend != null) Modifier.weight(1f) else Modifier.width(width))
             .fillMaxHeight()
             .keyInput(
                 inputKey = key,
@@ -349,10 +370,20 @@ fun RowScope.IconKey(
                 onReleased = onReleased,
                 onLongPressed = onLongPressed,
                 onPressedChanged = { pressed = it }
-            )
-            .then(modifier),
-        contentAlignment = Alignment.Center
+            ),
+        contentAlignment = when (edgeExtend) {
+            Alignment.Start -> Alignment.CenterEnd
+            Alignment.End -> Alignment.CenterStart
+            else -> Alignment.Center
+        }
     ) {
+      // Fixed at the original width regardless of the outer box's size, so
+      // the icon sits exactly where it did before an edge extension grew
+      // that outer box - only the hitbox grows, never the visible key.
+      Box(
+        modifier = Modifier.width(width).fillMaxHeight().then(modifier),
+        contentAlignment = Alignment.Center
+      ) {
         Icon(
             painterResource(drawable),
             contentDescription = "TODO",
@@ -370,6 +401,7 @@ fun RowScope.IconKey(
                 }
             )
         )
+      }
     }
 }
 
@@ -468,15 +500,11 @@ fun RowScope.Key(
             ?: { callback.onKeyCancelled(code) }
     }
 
+    val edgeExtend = LocalKeyEdgeExtend.current
     Box(
         modifier = Modifier
-            .width(width)
+            .then(if (edgeExtend != null) Modifier.weight(1f) else Modifier.width(width))
             .fillMaxHeight()
-            .then(
-                if (swipeConfig != null && override == null) {
-                    Modifier.onGloballyPositioned { swipeConfig.report(code, it.boundsInRoot()) }
-                } else Modifier
-            )
             .keyInput(
                 inputKey = code,
                 onPressed = onPressed,
@@ -485,8 +513,23 @@ fun RowScope.Key(
                 onPressedChanged = { pressed = it },
                 onCancelled = onCancelled
             ),
-        contentAlignment = Alignment.Center
+        contentAlignment = when (edgeExtend) {
+            Alignment.Start -> Alignment.CenterEnd
+            Alignment.End -> Alignment.CenterStart
+            else -> Alignment.Center
+        }
     ) {
+      Box(
+        modifier = Modifier
+            .width(width)
+            .fillMaxHeight()
+            .then(
+                if (swipeConfig != null && override == null) {
+                    Modifier.onGloballyPositioned { swipeConfig.report(code, it.boundsInRoot()) }
+                } else Modifier
+            ),
+        contentAlignment = Alignment.Center
+      ) {
         Text(
             text = label,
             color = LocalKeyboardColors.current.foreground,
@@ -506,6 +549,7 @@ fun RowScope.Key(
                 }
             )
         )
+      }
     }
 }
 
@@ -521,9 +565,10 @@ fun RowScope.MultiLabelKey(
     val onPressed = remember(key, callback) { { callback.onSpecialKeyPressed(key) } }
     val onReleased = remember(key, callback) { { callback.onSpecialKeyReleased(key) } }
     val onLongPressed = remember(key, callback) { { callback.onSpecialKeyLongPressed(key) } }
+    val edgeExtend = LocalKeyEdgeExtend.current
     Box(
         modifier = Modifier
-            .width(width)
+            .then(if (edgeExtend != null) Modifier.weight(1f) else Modifier.width(width))
             .fillMaxHeight()
             .keyInput(
                 inputKey = labelText,
@@ -532,8 +577,19 @@ fun RowScope.MultiLabelKey(
                 onLongPressed = onLongPressed,
                 onPressedChanged = { pressed = it }
             ),
-        contentAlignment = BiasAlignment(-0.2f, 0.2f)
+        contentAlignment = when (edgeExtend) {
+            Alignment.Start -> Alignment.CenterEnd
+            Alignment.End -> Alignment.CenterStart
+            else -> Alignment.Center
+        }
     ) {
+      // Fixed at the original width regardless of the outer box's size, so
+      // the label sits exactly where it did before an edge extension grew
+      // that outer box - only the hitbox grows, never the visible key.
+      Box(
+        modifier = Modifier.width(width).fillMaxHeight(),
+        contentAlignment = BiasAlignment(-0.2f, 0.2f)
+      ) {
         Text(
             text = labelText,
             color = LocalKeyboardColors.current.foreground,
@@ -555,6 +611,7 @@ fun RowScope.MultiLabelKey(
                 }
             )
         )
+      }
     }
 }
 
@@ -595,8 +652,16 @@ fun ColumnScope.FirstRow(
     enableKeyAnimation: Boolean
 ) {
     DefaultRow {
-        for (char in characters) {
-            Key(char, callback, swipeConfig, enableKeyAnimation)
+        val lastIndex = characters.lastIndex
+        characters.forEachIndexed { index, char ->
+            val edgeExtend = when (index) {
+                0 -> Alignment.Start
+                lastIndex -> Alignment.End
+                else -> null
+            }
+            CompositionLocalProvider(LocalKeyEdgeExtend provides edgeExtend) {
+                Key(char, callback, swipeConfig, enableKeyAnimation)
+            }
         }
     }
 }
@@ -621,7 +686,9 @@ fun ColumnScope.ThirdRow(
     leftButton: @Composable RowScope.() -> Unit
 ) {
     DefaultRow {
-        leftButton()
+        CompositionLocalProvider(LocalKeyEdgeExtend provides Alignment.Start) {
+            leftButton()
+        }
         if (characters.length == 5) {
             // currently this row only has 5 or 7 chars, so add some space if there are 5
             Spacer(Modifier.width(MEDIUM_KEY_WIDTH_DP.dp))
@@ -632,14 +699,16 @@ fun ColumnScope.ThirdRow(
         if (characters.length == 5) {
             Spacer(Modifier.width(STANDARD_KEY_WIDTH_DP.dp))
         }
-        IconKey(
-            R.drawable.back_lp3,
-            SpecialKey.Backspace,
-            callback,
-            keyboardOptions.enableKeyAnimation,
-            width = ICON_KEY_WIDTH_DP.dp,
-            modifier = Modifier.padding(10.dp).padding(start = 8.dp, bottom = 6.dp)
-        )
+        CompositionLocalProvider(LocalKeyEdgeExtend provides Alignment.End) {
+            IconKey(
+                R.drawable.back_lp3,
+                SpecialKey.Backspace,
+                callback,
+                keyboardOptions.enableKeyAnimation,
+                width = ICON_KEY_WIDTH_DP.dp,
+                modifier = Modifier.padding(10.dp).padding(start = 8.dp, bottom = 6.dp)
+            )
+        }
     }
 }
 
@@ -657,7 +726,9 @@ fun ColumnScope.FinalRow(
         horizontalArrangement = Arrangement.Center,
     ) {
         val iconKeyWidth = STANDARD_KEY_WIDTH_DP + 12
-        leftButton()
+        CompositionLocalProvider(LocalKeyEdgeExtend provides Alignment.Start) {
+            leftButton()
+        }
         if (!options.emojis.isNullOrEmpty()) {
             IconKey(
                 R.drawable.smile,
@@ -684,17 +755,19 @@ fun ColumnScope.FinalRow(
             Spacer(Modifier.width(iconKeyWidth.dp))
         }
 
-        if (options.displayVoice) {
-            IconKey(
-                R.drawable.microphone_lp3,
-                SpecialKey.Voice,
-                callback,
-                options.enableKeyAnimation,
-                width = iconKeyWidth.dp,
-                modifier = Modifier.padding(top = 2.dp, start = 12.dp, end = 4.dp)
-            )
-        } else {
-            Spacer(Modifier.width(iconKeyWidth.dp))
+        CompositionLocalProvider(LocalKeyEdgeExtend provides Alignment.End) {
+            if (options.displayVoice) {
+                IconKey(
+                    R.drawable.microphone_lp3,
+                    SpecialKey.Voice,
+                    callback,
+                    options.enableKeyAnimation,
+                    width = iconKeyWidth.dp,
+                    modifier = Modifier.padding(top = 2.dp, start = 12.dp, end = 4.dp)
+                )
+            } else {
+                Spacer(Modifier.width(iconKeyWidth.dp))
+            }
         }
     }
 }
